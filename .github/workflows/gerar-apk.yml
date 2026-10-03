@@ -22,6 +22,10 @@ jobs:
           cp node_modules/pdfjs-dist/build/pdf.worker.min.js www/
       - name: Criar projeto Android
         run: npx cap add android
+      - name: Permitir uso da câmera
+        run: |
+          sed -i 's#<uses-permission android:name="android.permission.INTERNET" />#&\n    <uses-permission android:name="android.permission.CAMERA" />#' android/app/src/main/AndroidManifest.xml
+          grep -n "permission" android/app/src/main/AndroidManifest.xml
       - name: Trocar ícone
         run: |
           rm -rf android/app/src/main/res/mipmap-anydpi-v26
