@@ -1,0 +1,5 @@
+Projeto do app Eletronica Osmar.
+Nao precisa mexer em nada aqui dentro: suba tudo para o GitHub
+(incluindo a pasta escondida .github) e o GitHub gera o APK sozinho.
+Se a pasta .github nao subir, crie na mao o arquivo
+.github/workflows/gerar-apk.yml (copie o conteudo de gerar-apk.yml deste ZIP).
