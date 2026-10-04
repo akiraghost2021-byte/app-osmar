@@ -1,10 +1,5 @@
 {
   "appId": "br.com.eletronicaosmar.app",
   "appName": "Eletrônica Osmar",
-  "webDir": "www",
-  "plugins": {
-    "CapacitorHttp": {
-      "enabled": true
-    }
-  }
+  "webDir": "www"
 }

@@ -660,123 +660,121 @@ document.addEventListener('input', e => {
   if (fn) $('#list').innerHTML = fn();
 });
 
-/* ---------- Sincronização com o Google Drive ---------- */
+/* ---------- Sincronização na nuvem (Supabase) ---------- */
 /* Tudo é salvo primeiro no celular (IndexedDB). Quando há internet, o app junta as
-   mudanças deste aparelho com as do Drive (vale a edição mais recente de cada item). */
-const SY = {st:'off', last:0, busy:false, again:false, timer:null, pt:null, dev:null};
+   mudanças deste aparelho com as da nuvem (vale a edição mais recente de cada item). */
+const SY = {st:'off', last:0, busy:false, again:false, timer:null, msg:'', err:''};
 const SYS = ['clientes','consertos','estoque','equip','arquivos'];
-const DRV = 'https://www.googleapis.com/drive/v3/files', UPL = 'https://www.googleapis.com/upload/drive/v3/files';
-const syGet = () => { try { return JSON.parse(localStorage.getItem('sync_auth') || 'null'); } catch(e){ return null; } };
-const sySet = a => { try { if (a) localStorage.setItem('sync_auth', JSON.stringify(a)); else localStorage.removeItem('sync_auth'); } catch(e){} };
+const LS = {
+  get(k){ try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch(e){ return null; } },
+  set(k, v){ try { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, JSON.stringify(v)); } catch(e){} }
+};
+const syCfg = () => LS.get('sb_cfg');
+function syF(url, opt){ const f = window.CapacitorWebFetch ? window.CapacitorWebFetch.bind(window) : window.fetch.bind(window); return f(url, opt); }
+const syMsgOf = (j, status) => {
+  const t = String((j && (j.error_description || j.msg || j.message || j.error)) || '');
+  if (/invalid login/i.test(t)) return 'E-mail ou senha incorretos. Confira se o usuário foi criado no Supabase.';
+  if (/email not confirmed/i.test(t)) return 'Esse e-mail ainda não foi confirmado. No Supabase, crie o usuário marcando "Auto Confirm User".';
+  if (/invalid api key|apikey/i.test(t)) return 'A chave pública está errada. Copie de novo a "Publishable key".';
+  if (/signups not allowed|signup/i.test(t)) return 'Esse usuário não existe. Crie o usuário no Supabase (Authentication > Users).';
+  return (t || ('erro ' + status)).slice(0, 160);
+};
 
-async function oauthPost(url, obj){
-  const H = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.CapacitorHttp;
-  if (H && H.post){
-    try {
-      const r = await H.post({url, headers:{'Content-Type':'application/x-www-form-urlencoded'}, data:obj});
-      return {data: typeof r.data === 'string' ? JSON.parse(r.data) : (r.data || {})};
-    } catch(e){}
-  }
-  const r = await fetch(url, {method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:new URLSearchParams(obj)});
-  return {data: await r.json()};
-}
 async function syToken(){
-  const a = syGet(); if (!a || !a.refresh) throw new Error('auth');
-  if (a.access && a.exp > Date.now() + 60000) return a.access;
-  const r = await oauthPost('https://oauth2.googleapis.com/token', {client_id:a.cid, client_secret:a.sec, refresh_token:a.refresh, grant_type:'refresh_token'});
-  if (!r.data.access_token) throw new Error(r.data.error === 'invalid_grant' ? 'auth' : 'token');
-  a.access = r.data.access_token; a.exp = Date.now() + r.data.expires_in * 1000; sySet(a); return a.access;
+  const c = syCfg(), s = LS.get('sb_sess'); if (!c || !s) throw new Error('auth');
+  if (s.access && s.exp > Date.now() + 60000) return s.access;
+  let r;
+  try { r = await syF(c.url + '/auth/v1/token?grant_type=refresh_token', {method:'POST', headers:{apikey:c.key, 'Content-Type':'application/json'}, body:JSON.stringify({refresh_token:s.refresh})}); }
+  catch(e){ const x = new Error('rede'); x.detail = 'sem acesso ao servidor (' + String(e && e.message || e) + ')'; throw x; }
+  let j = {}; try { j = await r.json(); } catch(e){}
+  if (!r.ok || !j.access_token){ if ([400, 401, 403].includes(r.status)) throw new Error('auth'); const x = new Error('http'); x.detail = syMsgOf(j, r.status); throw x; }
+  LS.set('sb_sess', {access:j.access_token, refresh:j.refresh_token || s.refresh, exp:Date.now() + (j.expires_in || 3600) * 1000});
+  return j.access_token;
 }
-
-/* conectar (login do Google por código, sem precisar de plugin nativo) */
-async function syConnect(){
-  const cid = ($('#syCid') && $('#syCid').value || '').trim(), sec = ($('#sySec') && $('#sySec').value || '').trim();
-  if (!cid || !sec){ toast('Preencha os dois campos.'); return; }
-  try {
-    const r = await oauthPost('https://oauth2.googleapis.com/device/code', {client_id:cid, scope:'https://www.googleapis.com/auth/drive.appdata'});
-    if (!r.data.device_code) throw new Error('x');
-    SY.dev = {cid, sec, ...r.data, until:Date.now() + r.data.expires_in * 1000, wait:(r.data.interval || 5) * 1000};
-    SY.st = 'pair'; syPaint(); syPoll();
-  } catch(e){ toast('Não consegui iniciar. Confira o ID, a chave e a internet.'); }
-}
-async function syPoll(){
-  const d = SY.dev; if (!d) return; clearTimeout(SY.pt);
-  if (Date.now() > d.until){ SY.dev = null; SY.st = 'off'; syPaint(); toast('O código expirou. Tente de novo.'); return; }
-  try {
-    const r = await oauthPost('https://oauth2.googleapis.com/token', {client_id:d.cid, client_secret:d.sec, device_code:d.device_code, grant_type:'urn:ietf:params:oauth:grant-type:device_code'});
-    if (r.data.refresh_token){
-      sySet({cid:d.cid, sec:d.sec, refresh:r.data.refresh_token, access:r.data.access_token, exp:Date.now() + r.data.expires_in * 1000});
-      SY.dev = null; SY.st = 'idle'; toast('Conectado ao Drive!'); syPaint(); syRun(); return;
-    }
-    const er = r.data.error;
-    if (er === 'slow_down') d.wait += 5000;
-    else if (er && er !== 'authorization_pending'){ SY.dev = null; SY.st = 'off'; syPaint(); toast(er === 'access_denied' ? 'A autorização foi negada.' : 'Não deu certo. Tente de novo.'); return; }
-  } catch(e){}
-  SY.pt = setTimeout(syPoll, d.wait);
-}
-
-/* Google Drive (pasta escondida do app) */
-async function drv(url, opt = {}){
+async function syReq(path, opt = {}){
+  const c = syCfg(); if (!c) throw new Error('auth');
   const tk = await syToken();
-  const r = await fetch(url, {...opt, headers:{Authorization:'Bearer ' + tk, ...(opt.headers || {})}});
-  if (!r.ok) throw new Error('drive ' + r.status);
+  let r;
+  try { r = await syF(c.url + path, {...opt, headers:{apikey:c.key, Authorization:'Bearer ' + tk, ...(opt.headers || {})}}); }
+  catch(e){ const x = new Error('rede'); x.detail = 'sem acesso ao servidor (' + String(e && e.message || e) + ')'; throw x; }
+  if (!r.ok){
+    let j = null; try { j = JSON.parse(await r.text()); } catch(e){}
+    const x = new Error(r.status === 401 ? 'auth' : 'http'); x.status = r.status; x.detail = syMsgOf(j, r.status); throw x;
+  }
   return r;
 }
-async function drvList(){
-  const m = {}; let pt = '';
-  do {
-    const r = await (await drv(`${DRV}?spaces=appDataFolder&pageSize=1000&fields=nextPageToken,files(id,name)${pt ? '&pageToken=' + encodeURIComponent(pt) : ''}`)).json();
-    (r.files || []).forEach(f => { m[f.name] = f.id; }); pt = r.nextPageToken || '';
-  } while (pt);
-  return m;
-}
-async function drvPut(name, blob, type, id){
-  if (id) return drv(`${UPL}/${id}?uploadType=media`, {method:'PATCH', headers:{'Content-Type':type}, body:blob});
-  const bd = 'osmar' + uid();
-  const body = new Blob([`--${bd}\r\nContent-Type: application/json\r\n\r\n`, JSON.stringify({name, parents:['appDataFolder']}), `\r\n--${bd}\r\nContent-Type: ${type}\r\n\r\n`, blob, `\r\n--${bd}--`]);
-  return drv(`${UPL}?uploadType=multipart`, {method:'POST', headers:{'Content-Type':'multipart/related; boundary=' + bd}, body});
+
+/* entrar (e-mail e senha da oficina) */
+async function syConnect(){
+  const g = id => ($(id) && $(id).value || '').trim();
+  let url = g('#syUrl').replace(/\/+$/, '').replace(/\/(rest|auth)\/v1.*$/, ''); const key = g('#syKey'), email = g('#syEmail'), pass = ($('#syPass') && $('#syPass').value) || '';
+  if (url && !/^https?:\/\//i.test(url)) url = 'https://' + url;
+  if (!url || !key || !email || !pass){ toast('Preencha os quatro campos.'); return; }
+  SY.msg = ''; SY.st = 'busy'; syPaint();
+  let r;
+  try { r = await syF(url + '/auth/v1/token?grant_type=password', {method:'POST', headers:{apikey:key, 'Content-Type':'application/json'}, body:JSON.stringify({email, password:pass})}); }
+  catch(e){ SY.msg = 'Sem acesso ao servidor (' + String(e && e.message || e) + '). Confira o endereço do projeto e a internet.'; SY.st = 'off'; syPaint(); toast('Não consegui entrar. Veja o motivo na tela.'); return; }
+  let j = {}; try { j = await r.json(); } catch(e){}
+  if (!r.ok || !j.access_token){ SY.msg = syMsgOf(j, r.status); SY.st = 'off'; syPaint(); toast('Não consegui entrar. Veja o motivo na tela.'); return; }
+  LS.set('sb_cfg', {url, key, email}); LS.set('sb_sess', {access:j.access_token, refresh:j.refresh_token, exp:Date.now() + (j.expires_in || 3600) * 1000}); LS.set('sb_pull', null);
+  SY.st = 'idle'; SY.msg = ''; toast('Conectado!'); syPaint(); syRun();
 }
 
-/* junta o que está no celular com o que está no Drive */
+/* junta o que está no celular com o que está na nuvem */
 async function syncNow(){
-  const ids = await drvList();
-  let remote = {};
-  if (ids['dados.json']) remote = await (await drv(`${DRV}/${ids['dados.json']}?alt=media`)).json();
-  const rrec = remote.rec || {}, rtomb = remote.tomb || {};
-  const tl = {}; for (const t of await dbAll(TOMB)) tl[t.id] = t._u || 0;
-  const tomb = {...rtomb}; for (const k in tl) tomb[k] = Math.max(tomb[k] || 0, tl[k]);
-  let changed = false; for (const k in tomb) if (!(rtomb[k] >= tomb[k])) changed = true;
-  const local = {}; for (const s of SYS){ local[s] = {}; for (const o of await dbAll(s)) local[s][o.id] = o; }
-  const out = {v:1, rec:{}, tomb}, del = [], down = [];
+  const full = !LS.get('sb_pull');
+  const since = LS.get('sb_pull') || '1970-01-01T00:00:00Z';
+  /* 1) buscar novidades da nuvem */
+  const rows = []; let from = 0;
+  for (;;){
+    const r = await syReq(`/rest/v1/registros?select=store,id,atualizado,apagado,dados,modificado&modificado=gte.${encodeURIComponent(since)}&order=modificado.asc,store.asc,id.asc&limit=1000&offset=${from}`);
+    const part = await r.json(); rows.push(...part); if (part.length < 1000) break; from += 1000;
+  }
+  const tombs = {}; for (const t of await dbAll(TOMB)) tombs[t.id] = t._u || 0;
+  let changed = 0;
+  for (const row of rows){
+    if (!SYS.includes(row.store)) continue;
+    const key = row.store + ':' + row.id, ru = Number(row.atualizado) || 0;
+    const loc = await tx(row.store, 'readonly', s => s.get(row.id));
+    const lu = loc ? (loc._u || 0) : -1, tu = key in tombs ? tombs[key] : -1;
+    if (ru <= Math.max(lu, tu)) continue;
+    if (tu >= 0){ await tx(TOMB, 'readwrite', s => s.delete(key)); delete tombs[key]; }
+    if (row.apagado){ if (loc){ await tx(row.store, 'readwrite', s => s.delete(row.id)); changed++; } continue; }
+    const rec = {...row.dados, id:row.id, _u:ru, _s:ru};
+    if (row.store === 'arquivos'){
+      try { const b = await (await syReq(`/storage/v1/object/authenticated/arquivos/${encodeURIComponent(row.id)}`)).blob(); rec.blob = new Blob([b], {type:rec.tipo || b.type}); }
+      catch(e){ if (e.status === 404 || e.status === 400) continue; throw e; }
+    }
+    await tx(row.store, 'readwrite', s => s.put(rec)); changed++;
+  }
+  if (rows.length) LS.set('sb_pull', rows[rows.length - 1].modificado);
+  /* 2) enviar o que é novo neste aparelho */
+  const out = [], marks = [], gone = [];
   for (const s of SYS){
-    out.rec[s] = {}; const R = rrec[s] || {}, L = local[s];
-    for (const id of new Set([...Object.keys(R), ...Object.keys(L)])){
-      const l = L[id], r = R[id], lu = l ? (l._u || 0) : -1, ru = r ? (r._u || 0) : -1;
-      const best = lu >= ru ? l : r, bu = Math.max(lu, ru), t = tomb[s + ':' + id] || 0;
-      if (t && t >= bu){ if (l) del.push([s, id]); continue; }
-      if (s === 'arquivos'){ const {blob, ...m} = best; out.rec[s][id] = m; } else out.rec[s][id] = best;
-      if (lu > ru) changed = true; else if (ru > lu) down.push([s, r]);
+    for (const o of await dbAll(s)){
+      const u = o._u || 0;
+      if (!full && u === (o._s === undefined ? -1 : o._s)) continue;
+      if (s === 'arquivos'){
+        if (!o.blob) continue;
+        await syReq(`/storage/v1/object/arquivos/${encodeURIComponent(o.id)}`, {method:'POST', headers:{'x-upsert':'true', 'Content-Type':o.tipo || 'application/octet-stream'}, body:o.blob});
+      }
+      const {blob, _s, ...meta} = o;
+      out.push({store:s, id:o.id, atualizado:u, apagado:false, dados:meta}); marks.push([s, o.id, u]);
     }
   }
-  /* aplica no celular o que veio do Drive */
-  for (const [s, id] of del) await tx(s, 'readwrite', x => x.delete(id));
-  for (const [s, r] of down){
-    if (s === 'arquivos'){
-      if (!ids['a_' + r.id]) continue;
-      const b = await (await drv(`${DRV}/${ids['a_' + r.id]}?alt=media`)).blob();
-      await tx(s, 'readwrite', x => x.put({...r, blob:new Blob([b], {type:r.tipo || b.type})}));
-    } else await tx(s, 'readwrite', x => x.put(r));
+  for (const t of await dbAll(TOMB)){
+    const i = t.id.indexOf(':'), s = t.id.slice(0, i), id = t.id.slice(i + 1);
+    if (!SYS.includes(s)){ gone.push(t.id); continue; }
+    if (s === 'arquivos'){ try { await syReq(`/storage/v1/object/arquivos/${encodeURIComponent(id)}`, {method:'DELETE'}); } catch(e){ if (e.status !== 404 && e.status !== 400) throw e; } }
+    out.push({store:s, id, atualizado:t._u || 0, apagado:true, dados:null}); gone.push(t.id);
   }
-  for (const k in tomb) if (!(tl[k] >= tomb[k])) await tx(TOMB, 'readwrite', x => x.put({id:k, _u:tomb[k]}));
-  /* manda para o Drive o que é novo aqui (arquivos primeiro, depois a lista) */
-  for (const id in out.rec.arquivos){
-    const f = local.arquivos[id];
-    if (!ids['a_' + id] && f && f.blob) await drvPut('a_' + id, f.blob, f.tipo || 'application/octet-stream');
+  for (let i = 0; i < out.length; i += 100){
+    await syReq('/rest/v1/registros?on_conflict=store,id', {method:'POST', headers:{'Content-Type':'application/json', Prefer:'resolution=merge-duplicates,return=minimal'}, body:JSON.stringify(out.slice(i, i + 100))});
   }
-  for (const name in ids) if (name.startsWith('a_') && tomb['arquivos:' + name.slice(2)]) await drv(`${DRV}/${ids[name]}`, {method:'DELETE'});
-  if (changed) await drvPut('dados.json', new Blob([JSON.stringify(out)], {type:'application/json'}), 'application/json', ids['dados.json']);
-  /* atualiza a tela */
-  if (del.length || down.length){
+  for (const [s, id, u] of marks) await tx(s, 'readwrite', st => { const g = st.get(id); g.onsuccess = () => { const o = g.result; if (o && (o._u || 0) === u){ o._s = u; st.put(o); } }; return g; });
+  for (const id of gone) await tx(TOMB, 'readwrite', st => st.delete(id));
+  /* 3) atualizar a tela */
+  if (changed){
     const [c, k, s, q] = await Promise.all(['clientes','consertos','estoque','equip'].map(dbAll));
     S.clientes = c || []; S.consertos = k || []; S.estoque = s || []; S.equip = (q || []).map(e => ({semelhantes:[], pecas:[], comentarios:'', ...e}));
     Object.keys(filesCache).forEach(k => delete filesCache[k]);
@@ -787,16 +785,19 @@ async function syncNow(){
   }
 }
 async function syRun(){
-  if (!syGet() || memOnly || SY.dev) return;
+  if (!syCfg() || memOnly || SY.st === 'authfail') return;
   if (!navigator.onLine){ SY.st = 'offline'; syPaint(); return; }
   if (SY.busy){ SY.again = true; return; }
-  SY.busy = true; SY.st = 'busy'; syPaint();
-  try { await syncNow(); SY.st = 'ok'; SY.last = Date.now(); try { localStorage.setItem('sync_last', SY.last); } catch(e){} }
-  catch(e){ SY.st = e && e.message === 'auth' ? 'authfail' : (navigator.onLine ? 'err' : 'offline'); }
+  SY.busy = true; SY.st = 'busy'; SY.err = ''; syPaint();
+  try { await syncNow(); SY.st = 'ok'; SY.last = Date.now(); LS.set('sb_last', SY.last); }
+  catch(e){
+    SY.st = e && e.message === 'auth' ? 'authfail' : (navigator.onLine ? 'err' : 'offline');
+    SY.err = (e && (e.detail || e.message)) || '';
+  }
   SY.busy = false; syPaint();
   if (SY.again){ SY.again = false; syQueue(1500); }
 }
-function syQueue(ms = 4000){ if (!syGet()) return; clearTimeout(SY.timer); SY.timer = setTimeout(syRun, ms); }
+function syQueue(ms = 4000){ if (!syCfg()) return; clearTimeout(SY.timer); SY.timer = setTimeout(syRun, ms); }
 
 /* tela */
 function syStatusText(){
@@ -806,44 +807,40 @@ function syStatusText(){
     idle: h ? 'Última sincronização às ' + h + '.' : 'Conectado. Aguardando a primeira sincronização.',
     ok:'Tudo sincronizado' + (h ? ' às ' + h : '') + '.',
     offline:'Sem internet. Tudo está sendo salvo no celular e será enviado quando a rede voltar.',
-    err:'Não consegui sincronizar agora. O app tenta de novo sozinho.',
-    authfail:'A conexão com o Google expirou. Toque em Desconectar e conecte de novo.'
+    err:'Não consegui sincronizar agora. O app tenta de novo sozinho.' + (SY.err ? ' Motivo: ' + SY.err : ''),
+    authfail:'A conexão expirou ou a senha mudou. Toque em Sair da nuvem e entre de novo.'
   })[SY.st] || '';
 }
 function syBoxHTML(){
-  const d = SY.dev;
-  if (d) return `<h2>Conectar ao Google Drive</h2><p class="sub">1) Toque no botão e entre com sua conta Google.<br>2) Quando pedir um código, digite este:</p>
-    <p class="num" style="font-size:30px;font-weight:800;letter-spacing:.12em;text-align:center;margin:12px 0">${esc(d.user_code)}</p>
-    <div class="actions"><a class="btn" href="${esc(d.verification_url)}" target="_blank" rel="noopener" style="text-decoration:none;display:inline-flex;align-items:center">Abrir página do Google</a><button class="btn ghost" data-act="sync-off">Cancelar</button></div>
-    <p class="sub">Depois de autorizar, volte para o app. Ele conecta sozinho.</p>`;
-  if (!syGet()) return `<h2>Sincronizar pelo Google Drive</h2><p class="sub">Salva tudo automaticamente no Drive e passa as mudanças para os outros aparelhos (use a mesma conta Google em todos). Sem internet, continua salvando no celular. Para pegar o ID e a chave abaixo, siga o arquivo GUIA-DRIVE.txt.</p>
-    <label class="fld"><span>ID do cliente</span><input id="syCid" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
-    <label class="fld"><span>Chave secreta do cliente</span><input id="sySec" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
-    <div class="actions"><button class="btn" data-act="sync-connect">Conectar ao Drive</button></div>`;
-  return `<h2>Google Drive</h2><p class="sub" id="syst">${syStatusText()}</p>
-    <p class="sub">Tudo que você cadastra é salvo no celular na hora e enviado ao Drive quando há internet. Os outros aparelhos com a mesma conta recebem as mudanças.</p>
-    <div class="actions"><button class="btn" data-act="sync-now">Sincronizar agora</button><button class="btn danger" data-act="sync-off">Desconectar</button></div>`;
+  if (!syCfg()) return `${SY.msg ? '<div class="warnbox">' + esc(SY.msg) + '</div>' : ''}<h2>Sincronizar na nuvem</h2><p class="sub">Salva tudo no celular na hora e envia para a nuvem quando há internet, passando as mudanças para os outros aparelhos. Use o mesmo e-mail e a mesma senha em todos. Para pegar os dados abaixo, siga o GUIA-NUVEM.txt.</p>
+    <label class="fld"><span>Endereço do projeto (Project URL)</span><input id="syUrl" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="https://xxxx.supabase.co"></label>
+    <label class="fld"><span>Chave pública (Publishable key)</span><input id="syKey" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
+    <label class="fld"><span>E-mail da oficina</span><input id="syEmail" type="email" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
+    <label class="fld"><span>Senha</span><input id="syPass" type="password" autocomplete="off"></label>
+    <div class="actions"><button class="btn" data-act="sync-connect">Entrar na nuvem</button></div>`;
+  return `<h2>Nuvem</h2><p class="sub" id="syst">${esc(syStatusText())}</p>
+    <p class="sub">Tudo que você cadastra é salvo no celular na hora e enviado para a nuvem quando há internet. Os outros aparelhos com o mesmo e-mail e senha recebem as mudanças.</p>
+    <div class="actions"><button class="btn" data-act="sync-now">Sincronizar agora</button><button class="btn danger" data-act="sync-off">Sair da nuvem</button></div>`;
 }
 function syPaint(){
   const b = $('#syncbox'); if (!b) return;
   if (document.activeElement && b.contains(document.activeElement) && document.activeElement.tagName === 'INPUT') return;
+  const ids = ['#syUrl', '#syKey', '#syEmail', '#syPass'], keep = ids.map(i => $(i) ? $(i).value : '');
   b.innerHTML = syBoxHTML();
+  if (!syCfg()) ids.forEach((i, n) => { if ($(i)) $(i).value = keep[n]; });
 }
 Object.assign(act, {
   'sync-connect': syConnect,
-  'sync-now': () => { if (!navigator.onLine) toast('Sem internet agora.'); clearTimeout(SY.timer); syRun(); },
-  'sync-off': () => {
-    if (SY.dev){ SY.dev = null; clearTimeout(SY.pt); SY.st = 'off'; syPaint(); return; }
-    confirmDlg('Desconectar do Google Drive? Os dados continuam no celular e no Drive.', () => { sySet(null); SY.st = 'off'; syPaint(); }, 'Desconectar');
-  }
+  'sync-now': () => { if (!navigator.onLine){ toast('Sem internet agora.'); return; } if (SY.st === 'authfail') SY.st = 'idle'; clearTimeout(SY.timer); syRun(); },
+  'sync-off': () => confirmDlg('Sair da nuvem? Os dados continuam no celular e na nuvem.', () => { LS.set('sb_cfg', null); LS.set('sb_sess', null); LS.set('sb_pull', null); SY.st = 'off'; SY.msg = ''; syPaint(); }, 'Sair')
 });
 function syStart(){
-  try { SY.last = Number(localStorage.getItem('sync_last') || 0); } catch(e){}
-  SY.st = syGet() ? 'idle' : 'off';
+  SY.last = Number(LS.get('sb_last') || 0);
+  SY.st = syCfg() ? 'idle' : 'off';
   addEventListener('online', () => syRun());
-  addEventListener('offline', () => { if (syGet()){ SY.st = 'offline'; syPaint(); } });
-  document.addEventListener('visibilitychange', () => { if (!document.hidden){ if (SY.dev) syPoll(); else syRun(); } });
-  setInterval(() => { if (!document.hidden) syRun(); }, 120000);
+  addEventListener('offline', () => { if (syCfg()){ SY.st = 'offline'; syPaint(); } });
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) syRun(); });
+  setInterval(() => { if (!document.hidden) syRun(); }, 60000);
   syRun();
 }
 
