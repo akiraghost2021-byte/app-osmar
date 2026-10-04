@@ -164,13 +164,13 @@ let toastTimer;
 function toast(msg){ const t = $('#toast'); t.textContent = msg; t.classList.remove('hidden'); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.add('hidden'), 2600); }
 
 /* ---------- banco de dados no aparelho (IndexedDB) ---------- */
-const STORES = ['clientes','consertos','estoque','equip','arquivos'];
+const STORES = ['clientes','consertos','estoque','equip','arquivos'], TOMB = 'lixeira';
 let idb = null, memOnly = false;
 function openDB(){
   return new Promise((res, rej) => {
     if (!window.indexedDB) return rej(new Error('sem indexedDB'));
-    const r = indexedDB.open('bancada-oficina', 1);
-    r.onupgradeneeded = () => { STORES.forEach(n => { if (!r.result.objectStoreNames.contains(n)) r.result.createObjectStore(n, {keyPath:'id'}); }); };
+    const r = indexedDB.open('bancada-oficina', 2);
+    r.onupgradeneeded = () => { STORES.concat(TOMB).forEach(n => { if (!r.result.objectStoreNames.contains(n)) r.result.createObjectStore(n, {keyPath:'id'}); }); };
     r.onsuccess = () => res(r.result);
     r.onerror = () => rej(r.error);
     r.onblocked = () => rej(new Error('bloqueado'));
@@ -187,8 +187,8 @@ function tx(store, mode, fn){
   });
 }
 const dbAll = n => tx(n, 'readonly', s => s.getAll());
-const dbPut = async (n, o) => { try { await tx(n, 'readwrite', s => s.put(o)); } catch(e){ toast('Não consegui salvar. Faça um backup.'); } };
-const dbDel = async (n, id) => { try { await tx(n, 'readwrite', s => s.delete(id)); } catch(e){ toast('Não consegui excluir.'); } };
+const dbPut = async (n, o) => { o._u = Date.now(); try { await tx(n, 'readwrite', s => s.put(o)); syQueue(); } catch(e){ toast('Não consegui salvar. Faça um backup.'); } };
+const dbDel = async (n, id) => { try { await tx(n, 'readwrite', s => s.delete(id)); await tx(TOMB, 'readwrite', s => s.put({id:n + ':' + id, _u:Date.now()})); syQueue(); } catch(e){ toast('Não consegui excluir.'); } };
 const dbClear = n => tx(n, 'readwrite', s => s.clear());
 
 /* ---------- estado ---------- */
@@ -524,7 +524,8 @@ function viewBackup(){
   <div class="card"><h2>Seus dados</h2><dl class="kv">
   <dt>Clientes</dt><dd class="num">${S.clientes.length}</dd><dt>Consertos</dt><dd class="num">${S.consertos.length}</dd>
   <dt>Itens no estoque</dt><dd class="num">${S.estoque.length}</dd><dt>Equipamentos</dt><dd class="num">${S.equip.length}</dd><dt>Esquemas</dt><dd class="num" id="nArq">${nf}</dd></dl></div>
-  <div class="card"><h2>Guardar uma cópia</h2><p class="sub">Tudo fica salvo só neste celular. Se limpar os dados do Chrome ou trocar de aparelho, perde tudo. Faça uma cópia de vez em quando: ao tocar no botão abre o menu de compartilhar, e aí é só mandar para o Drive ou para o WhatsApp.</p>
+  <div class="card" id="syncbox">${syBoxHTML()}</div>
+  <div class="card"><h2>Cópia manual em arquivo</h2><p class="sub">Sem a sincronização, tudo fica salvo só neste celular. Se limpar os dados do Chrome ou trocar de aparelho, perde tudo. Faça uma cópia de vez em quando: ao tocar no botão abre o menu de compartilhar, e aí é só mandar para o Drive ou para o WhatsApp.</p>
   <div class="actions"><button class="btn" data-act="export">Salvar cópia de segurança</button>
   <label class="btn ghost" style="display:inline-block">Restaurar uma cópia<input id="imp" type="file" accept=".json,application/json" hidden></label></div></div>`;
 }
@@ -548,6 +549,7 @@ async function doExport(){
 async function doImport(file){
   let d; try { d = JSON.parse(await file.text()); if (d.app !== 'bancada') throw 0; } catch(e){ toast('Esse arquivo não é uma cópia da Bancada.'); return; }
   confirmDlg(`Restaurar a cópia de ${d.data ? fdate(d.data.slice(0,10)) : 'data desconhecida'}? Os dados atuais serão substituídos.`, async () => {
+    for (const n of STORES) for (const o of await dbAll(n)) await tx(TOMB, 'readwrite', s => s.put({id:n + ':' + o.id, _u:Date.now() - 1000}));
     for (const n of STORES) await dbClear(n);
     for (const k of ['clientes','consertos','estoque','equip']){ S[k] = d[k] || []; for (const o of S[k]) await dbPut(k, o); }
     for (const f of d.arquivos || []) await dbPut('arquivos', {...f, blob:dataURLToBlob(f.blob)});
@@ -658,6 +660,193 @@ document.addEventListener('input', e => {
   if (fn) $('#list').innerHTML = fn();
 });
 
+/* ---------- Sincronização com o Google Drive ---------- */
+/* Tudo é salvo primeiro no celular (IndexedDB). Quando há internet, o app junta as
+   mudanças deste aparelho com as do Drive (vale a edição mais recente de cada item). */
+const SY = {st:'off', last:0, busy:false, again:false, timer:null, pt:null, dev:null};
+const SYS = ['clientes','consertos','estoque','equip','arquivos'];
+const DRV = 'https://www.googleapis.com/drive/v3/files', UPL = 'https://www.googleapis.com/upload/drive/v3/files';
+const syGet = () => { try { return JSON.parse(localStorage.getItem('sync_auth') || 'null'); } catch(e){ return null; } };
+const sySet = a => { try { if (a) localStorage.setItem('sync_auth', JSON.stringify(a)); else localStorage.removeItem('sync_auth'); } catch(e){} };
+
+async function oauthPost(url, obj){
+  const H = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.CapacitorHttp;
+  if (H && H.post){
+    try {
+      const r = await H.post({url, headers:{'Content-Type':'application/x-www-form-urlencoded'}, data:obj});
+      return {data: typeof r.data === 'string' ? JSON.parse(r.data) : (r.data || {})};
+    } catch(e){}
+  }
+  const r = await fetch(url, {method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:new URLSearchParams(obj)});
+  return {data: await r.json()};
+}
+async function syToken(){
+  const a = syGet(); if (!a || !a.refresh) throw new Error('auth');
+  if (a.access && a.exp > Date.now() + 60000) return a.access;
+  const r = await oauthPost('https://oauth2.googleapis.com/token', {client_id:a.cid, client_secret:a.sec, refresh_token:a.refresh, grant_type:'refresh_token'});
+  if (!r.data.access_token) throw new Error(r.data.error === 'invalid_grant' ? 'auth' : 'token');
+  a.access = r.data.access_token; a.exp = Date.now() + r.data.expires_in * 1000; sySet(a); return a.access;
+}
+
+/* conectar (login do Google por código, sem precisar de plugin nativo) */
+async function syConnect(){
+  const cid = ($('#syCid') && $('#syCid').value || '').trim(), sec = ($('#sySec') && $('#sySec').value || '').trim();
+  if (!cid || !sec){ toast('Preencha os dois campos.'); return; }
+  try {
+    const r = await oauthPost('https://oauth2.googleapis.com/device/code', {client_id:cid, scope:'https://www.googleapis.com/auth/drive.appdata'});
+    if (!r.data.device_code) throw new Error('x');
+    SY.dev = {cid, sec, ...r.data, until:Date.now() + r.data.expires_in * 1000, wait:(r.data.interval || 5) * 1000};
+    SY.st = 'pair'; syPaint(); syPoll();
+  } catch(e){ toast('Não consegui iniciar. Confira o ID, a chave e a internet.'); }
+}
+async function syPoll(){
+  const d = SY.dev; if (!d) return; clearTimeout(SY.pt);
+  if (Date.now() > d.until){ SY.dev = null; SY.st = 'off'; syPaint(); toast('O código expirou. Tente de novo.'); return; }
+  try {
+    const r = await oauthPost('https://oauth2.googleapis.com/token', {client_id:d.cid, client_secret:d.sec, device_code:d.device_code, grant_type:'urn:ietf:params:oauth:grant-type:device_code'});
+    if (r.data.refresh_token){
+      sySet({cid:d.cid, sec:d.sec, refresh:r.data.refresh_token, access:r.data.access_token, exp:Date.now() + r.data.expires_in * 1000});
+      SY.dev = null; SY.st = 'idle'; toast('Conectado ao Drive!'); syPaint(); syRun(); return;
+    }
+    const er = r.data.error;
+    if (er === 'slow_down') d.wait += 5000;
+    else if (er && er !== 'authorization_pending'){ SY.dev = null; SY.st = 'off'; syPaint(); toast(er === 'access_denied' ? 'A autorização foi negada.' : 'Não deu certo. Tente de novo.'); return; }
+  } catch(e){}
+  SY.pt = setTimeout(syPoll, d.wait);
+}
+
+/* Google Drive (pasta escondida do app) */
+async function drv(url, opt = {}){
+  const tk = await syToken();
+  const r = await fetch(url, {...opt, headers:{Authorization:'Bearer ' + tk, ...(opt.headers || {})}});
+  if (!r.ok) throw new Error('drive ' + r.status);
+  return r;
+}
+async function drvList(){
+  const m = {}; let pt = '';
+  do {
+    const r = await (await drv(`${DRV}?spaces=appDataFolder&pageSize=1000&fields=nextPageToken,files(id,name)${pt ? '&pageToken=' + encodeURIComponent(pt) : ''}`)).json();
+    (r.files || []).forEach(f => { m[f.name] = f.id; }); pt = r.nextPageToken || '';
+  } while (pt);
+  return m;
+}
+async function drvPut(name, blob, type, id){
+  if (id) return drv(`${UPL}/${id}?uploadType=media`, {method:'PATCH', headers:{'Content-Type':type}, body:blob});
+  const bd = 'osmar' + uid();
+  const body = new Blob([`--${bd}\r\nContent-Type: application/json\r\n\r\n`, JSON.stringify({name, parents:['appDataFolder']}), `\r\n--${bd}\r\nContent-Type: ${type}\r\n\r\n`, blob, `\r\n--${bd}--`]);
+  return drv(`${UPL}?uploadType=multipart`, {method:'POST', headers:{'Content-Type':'multipart/related; boundary=' + bd}, body});
+}
+
+/* junta o que está no celular com o que está no Drive */
+async function syncNow(){
+  const ids = await drvList();
+  let remote = {};
+  if (ids['dados.json']) remote = await (await drv(`${DRV}/${ids['dados.json']}?alt=media`)).json();
+  const rrec = remote.rec || {}, rtomb = remote.tomb || {};
+  const tl = {}; for (const t of await dbAll(TOMB)) tl[t.id] = t._u || 0;
+  const tomb = {...rtomb}; for (const k in tl) tomb[k] = Math.max(tomb[k] || 0, tl[k]);
+  let changed = false; for (const k in tomb) if (!(rtomb[k] >= tomb[k])) changed = true;
+  const local = {}; for (const s of SYS){ local[s] = {}; for (const o of await dbAll(s)) local[s][o.id] = o; }
+  const out = {v:1, rec:{}, tomb}, del = [], down = [];
+  for (const s of SYS){
+    out.rec[s] = {}; const R = rrec[s] || {}, L = local[s];
+    for (const id of new Set([...Object.keys(R), ...Object.keys(L)])){
+      const l = L[id], r = R[id], lu = l ? (l._u || 0) : -1, ru = r ? (r._u || 0) : -1;
+      const best = lu >= ru ? l : r, bu = Math.max(lu, ru), t = tomb[s + ':' + id] || 0;
+      if (t && t >= bu){ if (l) del.push([s, id]); continue; }
+      if (s === 'arquivos'){ const {blob, ...m} = best; out.rec[s][id] = m; } else out.rec[s][id] = best;
+      if (lu > ru) changed = true; else if (ru > lu) down.push([s, r]);
+    }
+  }
+  /* aplica no celular o que veio do Drive */
+  for (const [s, id] of del) await tx(s, 'readwrite', x => x.delete(id));
+  for (const [s, r] of down){
+    if (s === 'arquivos'){
+      if (!ids['a_' + r.id]) continue;
+      const b = await (await drv(`${DRV}/${ids['a_' + r.id]}?alt=media`)).blob();
+      await tx(s, 'readwrite', x => x.put({...r, blob:new Blob([b], {type:r.tipo || b.type})}));
+    } else await tx(s, 'readwrite', x => x.put(r));
+  }
+  for (const k in tomb) if (!(tl[k] >= tomb[k])) await tx(TOMB, 'readwrite', x => x.put({id:k, _u:tomb[k]}));
+  /* manda para o Drive o que é novo aqui (arquivos primeiro, depois a lista) */
+  for (const id in out.rec.arquivos){
+    const f = local.arquivos[id];
+    if (!ids['a_' + id] && f && f.blob) await drvPut('a_' + id, f.blob, f.tipo || 'application/octet-stream');
+  }
+  for (const name in ids) if (name.startsWith('a_') && tomb['arquivos:' + name.slice(2)]) await drv(`${DRV}/${ids[name]}`, {method:'DELETE'});
+  if (changed) await drvPut('dados.json', new Blob([JSON.stringify(out)], {type:'application/json'}), 'application/json', ids['dados.json']);
+  /* atualiza a tela */
+  if (del.length || down.length){
+    const [c, k, s, q] = await Promise.all(['clientes','consertos','estoque','equip'].map(dbAll));
+    S.clientes = c || []; S.consertos = k || []; S.estoque = s || []; S.equip = (q || []).map(e => ({semelhantes:[], pecas:[], comentarios:'', ...e}));
+    Object.keys(filesCache).forEach(k => delete filesCache[k]);
+    const kind = {cliente:'clientes', conserto:'consertos', item:'estoque', equip:'equip'}[route.v];
+    if (kind && !S[kind].some(x => x.id === route.id)){ stack = []; route = {v:{cliente:'clientes', conserto:'consertos', item:'estoque', equip:'equips'}[route.v]}; }
+    const ae = document.activeElement && document.activeElement.tagName;
+    if (!$('#layer').innerHTML && $('#viewer').classList.contains('hidden') && ae !== 'TEXTAREA' && ae !== 'INPUT') render();
+  }
+}
+async function syRun(){
+  if (!syGet() || memOnly || SY.dev) return;
+  if (!navigator.onLine){ SY.st = 'offline'; syPaint(); return; }
+  if (SY.busy){ SY.again = true; return; }
+  SY.busy = true; SY.st = 'busy'; syPaint();
+  try { await syncNow(); SY.st = 'ok'; SY.last = Date.now(); try { localStorage.setItem('sync_last', SY.last); } catch(e){} }
+  catch(e){ SY.st = e && e.message === 'auth' ? 'authfail' : (navigator.onLine ? 'err' : 'offline'); }
+  SY.busy = false; syPaint();
+  if (SY.again){ SY.again = false; syQueue(1500); }
+}
+function syQueue(ms = 4000){ if (!syGet()) return; clearTimeout(SY.timer); SY.timer = setTimeout(syRun, ms); }
+
+/* tela */
+function syStatusText(){
+  const h = SY.last ? new Date(SY.last).toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'}) : '';
+  return ({
+    busy:'Sincronizando…',
+    idle: h ? 'Última sincronização às ' + h + '.' : 'Conectado. Aguardando a primeira sincronização.',
+    ok:'Tudo sincronizado' + (h ? ' às ' + h : '') + '.',
+    offline:'Sem internet. Tudo está sendo salvo no celular e será enviado quando a rede voltar.',
+    err:'Não consegui sincronizar agora. O app tenta de novo sozinho.',
+    authfail:'A conexão com o Google expirou. Toque em Desconectar e conecte de novo.'
+  })[SY.st] || '';
+}
+function syBoxHTML(){
+  const d = SY.dev;
+  if (d) return `<h2>Conectar ao Google Drive</h2><p class="sub">1) Toque no botão e entre com sua conta Google.<br>2) Quando pedir um código, digite este:</p>
+    <p class="num" style="font-size:30px;font-weight:800;letter-spacing:.12em;text-align:center;margin:12px 0">${esc(d.user_code)}</p>
+    <div class="actions"><a class="btn" href="${esc(d.verification_url)}" target="_blank" rel="noopener" style="text-decoration:none;display:inline-flex;align-items:center">Abrir página do Google</a><button class="btn ghost" data-act="sync-off">Cancelar</button></div>
+    <p class="sub">Depois de autorizar, volte para o app. Ele conecta sozinho.</p>`;
+  if (!syGet()) return `<h2>Sincronizar pelo Google Drive</h2><p class="sub">Salva tudo automaticamente no Drive e passa as mudanças para os outros aparelhos (use a mesma conta Google em todos). Sem internet, continua salvando no celular. Para pegar o ID e a chave abaixo, siga o arquivo GUIA-DRIVE.txt.</p>
+    <label class="fld"><span>ID do cliente</span><input id="syCid" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
+    <label class="fld"><span>Chave secreta do cliente</span><input id="sySec" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
+    <div class="actions"><button class="btn" data-act="sync-connect">Conectar ao Drive</button></div>`;
+  return `<h2>Google Drive</h2><p class="sub" id="syst">${syStatusText()}</p>
+    <p class="sub">Tudo que você cadastra é salvo no celular na hora e enviado ao Drive quando há internet. Os outros aparelhos com a mesma conta recebem as mudanças.</p>
+    <div class="actions"><button class="btn" data-act="sync-now">Sincronizar agora</button><button class="btn danger" data-act="sync-off">Desconectar</button></div>`;
+}
+function syPaint(){
+  const b = $('#syncbox'); if (!b) return;
+  if (document.activeElement && b.contains(document.activeElement) && document.activeElement.tagName === 'INPUT') return;
+  b.innerHTML = syBoxHTML();
+}
+Object.assign(act, {
+  'sync-connect': syConnect,
+  'sync-now': () => { if (!navigator.onLine) toast('Sem internet agora.'); clearTimeout(SY.timer); syRun(); },
+  'sync-off': () => {
+    if (SY.dev){ SY.dev = null; clearTimeout(SY.pt); SY.st = 'off'; syPaint(); return; }
+    confirmDlg('Desconectar do Google Drive? Os dados continuam no celular e no Drive.', () => { sySet(null); SY.st = 'off'; syPaint(); }, 'Desconectar');
+  }
+});
+function syStart(){
+  try { SY.last = Number(localStorage.getItem('sync_last') || 0); } catch(e){}
+  SY.st = syGet() ? 'idle' : 'off';
+  addEventListener('online', () => syRun());
+  addEventListener('offline', () => { if (syGet()){ SY.st = 'offline'; syPaint(); } });
+  document.addEventListener('visibilitychange', () => { if (!document.hidden){ if (SY.dev) syPoll(); else syRun(); } });
+  setInterval(() => { if (!document.hidden) syRun(); }, 120000);
+  syRun();
+}
+
 /* ---------- início ---------- */
 (async function init(){
   try { idb = await openDB(); } catch(e){ idb = null; memOnly = true; }
@@ -675,6 +864,7 @@ document.addEventListener('input', e => {
   S.consertos.forEach(x => { if (x.status === 'entregue'){ x.status = 'retirado'; dbPut('consertos', x); } });
   if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
   render();
+  syStart();
   if (memOnly) toast('Dados não serão salvos neste navegador.');
 })();
 </script>
