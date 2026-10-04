@@ -1,0 +1,888 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Eletrônica Osmar</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1f7a55">
+<style>
+:root{
+  --bg:#eef2ef; --card:#ffffff; --ink:#14201b; --muted:#5b6b63; --line:#d3ddd7;
+  --accent:#1f7a55; --accent-ink:#ffffff; --accent-soft:#dcefe5;
+  --warn:#9a4a05; --warn-bg:#fdecd8; --danger:#b3261e; --ok:#1f7a55;
+  --shadow:0 1px 2px rgba(20,32,27,.08);
+  --c-ok:#1f9d55; --c-low:#e07b00; --c-zero:#d32f2f; --c-ret:#2f6fd0; --on-c:#ffffff;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0e1613; --card:#16211c; --ink:#e5eee9; --muted:#93a59b; --line:#27382f;
+    --accent:#4cc68d; --accent-ink:#06241a; --accent-soft:#1b3328;
+    --warn:#f0b36b; --warn-bg:#3a2a14; --danger:#ff8a80; --ok:#4cc68d; --shadow:none; --c-ok:#4cc68d; --c-low:#ffa63d; --c-zero:#ff7676; --c-ret:#7aa9ff; --on-c:#10140f;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0e1613; --card:#16211c; --ink:#e5eee9; --muted:#93a59b; --line:#27382f;
+  --accent:#4cc68d; --accent-ink:#06241a; --accent-soft:#1b3328;
+  --warn:#f0b36b; --warn-bg:#3a2a14; --danger:#ff8a80; --ok:#4cc68d; --shadow:none; --c-ok:#4cc68d; --c-low:#ffa63d; --c-zero:#ff7676; --c-ret:#7aa9ff; --on-c:#10140f;
+}
+*,*::before,*::after{box-sizing:inherit}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:16px;line-height:1.4;-webkit-tap-highlight-color:transparent}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.num{font-variant-numeric:tabular-nums}
+
+header.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:10;background:var(--accent);color:var(--accent-ink);display:flex;align-items:center;gap:8px;padding:10px 14px;min-height:56px}
+:root[data-theme="dark"] header.top{background:var(--card);color:var(--ink);border-bottom:2px solid var(--accent)}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) header.top{background:var(--card);color:var(--ink);border-bottom:2px solid var(--accent)}}
+.brand{font-size:12px;opacity:.85;font-weight:500;line-height:1.1}
+header.top h1{font-size:19px;font-weight:600;margin:0;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.iconbtn{background:transparent;border:0;color:inherit;width:40px;height:40px;border-radius:10px;display:grid;place-items:center;margin-left:-8px}
+.iconbtn:active{background:rgba(255,255,255,.18)}
+
+main{padding:14px 14px 150px;max-width:720px;margin:0 auto}
+nav.tabs{position:fixed;left:0;right:0;bottom:0;background:var(--card);border-top:1px solid var(--line);display:flex;padding-bottom:env(safe-area-inset-bottom,0px);z-index:10}
+nav.tabs button{flex:1;min-width:0;background:none;border:0;padding:8px 2px 9px;display:flex;flex-direction:column;align-items:center;gap:2px;font-size:11px;color:var(--muted);font-weight:500;min-height:56px}
+nav.tabs button svg{width:24px;height:24px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+nav.tabs button[aria-current="page"]{color:var(--accent);font-weight:700}
+
+.search input{width:100%;padding:12px 14px;border:1.5px solid var(--line);border-radius:12px;background:var(--card);margin-bottom:12px}
+.chips{display:flex;gap:8px;overflow-x:auto;padding-bottom:10px;margin:0 -14px 4px;padding-left:14px;padding-right:14px;scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex:none;border:1.5px solid var(--line);background:var(--card);border-radius:999px;padding:7px 14px;font-size:14px;font-weight:500;color:var(--ink)}
+.chip[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+
+.row{display:flex;align-items:center;gap:12px;width:100%;text-align:left;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:13px 14px;margin-bottom:8px;box-shadow:var(--shadow)}
+.row .grow{flex:1;min-width:0}
+.row b{display:block;font-weight:600;overflow:hidden;text-overflow:ellipsis}
+.row small,.sub{color:var(--muted);font-size:14px}
+.row small{display:block;overflow:hidden;text-overflow:ellipsis}
+.meta{color:var(--muted);font-size:13px;text-align:right}
+.tag{display:inline-block;border:1.5px solid var(--ink);border-radius:5px;padding:0 6px;font-size:13px;font-weight:600;margin-right:6px;font-variant-numeric:tabular-nums;letter-spacing:.02em}
+.pill{display:inline-block;border-radius:999px;padding:2px 10px;font-size:12.5px;font-weight:600;background:var(--accent-soft);color:var(--accent)}
+.pill.warn{background:var(--warn-bg);color:var(--warn)}
+.pill.zero{background:var(--danger);color:#fff}
+.group{font-size:14px;font-weight:600;color:var(--muted);margin:18px 2px 8px}
+
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:12px;box-shadow:var(--shadow)}
+.card h2{font-size:17px;margin:0 0 4px}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:15px;margin-top:8px}
+.kv dt{color:var(--muted)} .kv dd{margin:0;word-break:break-word}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.btn{border:0;border-radius:10px;padding:11px 16px;background:var(--accent);color:var(--accent-ink);font-weight:600;min-height:44px}
+.btn.ghost{background:transparent;border:1.5px solid var(--line);color:var(--ink)}
+.btn.danger{background:transparent;border:1.5px solid var(--danger);color:var(--danger)}
+.btn.small{padding:7px 12px;min-height:36px;font-size:14px}
+.fab{position:fixed;right:16px;bottom:calc(76px + env(safe-area-inset-bottom,0px));z-index:9;border:0;border-radius:999px;background:var(--accent);color:var(--accent-ink);font-weight:700;padding:14px 20px;box-shadow:0 4px 14px rgba(0,0,0,.28)}
+.empty{text-align:center;color:var(--muted);padding:32px 12px}
+.empty b{display:block;color:var(--ink);margin-bottom:4px}
+
+.qty{display:flex;align-items:center;gap:6px}
+.qty button{width:40px;height:40px;border-radius:10px;border:1.5px solid var(--line);background:var(--bg);font-size:22px;line-height:1;font-weight:600}
+.qty span{min-width:30px;text-align:center;font-weight:700;font-size:18px}
+
+.seg{display:flex;border:1.5px solid var(--line);border-radius:12px;overflow:hidden;margin-bottom:12px;background:var(--card)}
+.seg button{flex:1;border:0;background:none;padding:10px 4px;font-size:14px;font-weight:500;color:var(--muted);border-right:1px solid var(--line)}
+.seg button:last-child{border-right:0}
+.seg button[aria-selected="true"]{background:var(--accent);color:var(--accent-ink);font-weight:700}
+
+.scrim{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:60}
+.sheet{position:fixed;left:0;right:0;bottom:0;max-height:92%;overflow:auto;background:var(--card);border-radius:18px 18px 0 0;padding:18px 16px calc(18px + env(safe-area-inset-bottom,0px));z-index:61;max-width:720px;margin:0 auto}
+.sheet h2{margin:0 0 12px;font-size:19px}
+.fld{display:block;margin-bottom:12px}
+.fld span{display:block;font-size:14px;color:var(--muted);margin-bottom:4px;font-weight:500}
+.fld input,.fld select,.fld textarea{width:100%;padding:11px 12px;border:1.5px solid var(--line);border-radius:10px;background:var(--bg)}
+.fld .bad{border-color:var(--danger)}
+.sheet .btns{display:flex;gap:8px;margin-top:6px}
+.sheet .btns .btn{flex:1}
+textarea.notes{width:100%;min-height:55vh;padding:12px;border:1.5px solid var(--line);border-radius:12px;background:var(--card);line-height:1.5;resize:vertical}
+.saved{font-size:13px;color:var(--muted);height:20px;margin-top:6px}
+
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(84px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;z-index:70;font-size:14px;max-width:88%}
+.warnbox{background:var(--warn-bg);color:var(--warn);border-radius:12px;padding:10px 14px;margin-bottom:12px;font-size:14px}
+
+.viewer{position:fixed;inset:0;z-index:40;background:#0b0f0d;display:flex;flex-direction:column;padding-top:env(safe-area-inset-top,0px)}
+.viewer .bar{display:flex;align-items:center;gap:8px;padding:8px 10px;background:#16211c;color:#e5eee9}
+.viewer .bar .ttl{flex:1;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.viewer .bar button{background:#27382f;color:#e5eee9;border:0;border-radius:10px;min-width:44px;height:44px;font-size:20px;font-weight:600}
+.viewer .body{flex:1;overflow:auto;-webkit-overflow-scrolling:touch;padding-bottom:env(safe-area-inset-bottom,0px)}
+.viewer img{display:block;height:auto;background:#fff}
+.viewer canvas{display:block;background:#fff;margin:0 0 8px}
+.viewer .msg{color:#e5eee9;padding:24px;text-align:center}
+.st{border-left:7px solid var(--stc,var(--line))}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--stc);margin-right:6px}
+.pill.c{background:var(--stc);color:var(--on-c)}
+.plain{all:unset;display:block;width:100%;cursor:pointer}
+.plain:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.qty span.n{background:var(--stc);color:var(--on-c);border-radius:10px;padding:6px 0;min-width:46px}
+.buy{display:inline-block;margin-top:8px;padding:7px 16px;border-radius:999px;background:var(--stc);color:var(--on-c);font-weight:700;font-size:14px;text-decoration:none}
+.statusbtns{display:flex;gap:8px;margin-bottom:8px}
+.statusbtns button{flex:1;border:2px solid var(--stc);background:transparent;color:var(--ink);border-radius:10px;padding:11px 4px;font-weight:600;font-size:14px;min-height:46px}
+.statusbtns button[aria-pressed="true"]{background:var(--stc);color:var(--on-c)}
+.thumbs{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}
+.thumbs button{padding:0;border:0;border-radius:10px;overflow:hidden;aspect-ratio:1;background:var(--line)}
+.thumbs img{width:100%;height:100%;object-fit:cover;display:block}
+.hidden{display:none!important}
+@media (prefers-reduced-motion: no-preference){.sheet{animation:up .18s ease-out}@keyframes up{from{transform:translateY(24px);opacity:.4}to{transform:none;opacity:1}}}
+</style>
+<script src="pdf.min.js"></script>
+</head>
+<body>
+<header class="top"><button class="iconbtn hidden" id="back" data-act="back" aria-label="Voltar"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button><div style="flex:1;min-width:0"><div class="brand">Eletrônica Osmar</div><h1 id="title">Clientes</h1></div></header>
+<main id="app"></main>
+<nav class="tabs" id="tabs" aria-label="Seções">
+  <button data-act="tab" data-v="clientes"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg>Clientes</button>
+  <button data-act="tab" data-v="consertos"><svg viewBox="0 0 24 24"><rect x="6" y="4" width="12" height="17" rx="2"/><path d="M9 4h6v3H9zM9 12h6M9 16h4"/></svg>Consertos</button>
+  <button data-act="tab" data-v="estoque"><svg viewBox="0 0 24 24"><path d="M3 8l9-5 9 5v8l-9 5-9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/></svg>Estoque</button>
+  <button data-act="tab" data-v="equips"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>Equipamentos</button>
+  <button data-act="tab" data-v="backup"><svg viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M4 20h16"/></svg>Backup</button>
+</nav>
+<div id="layer"></div>
+<div id="viewer" class="viewer hidden"></div>
+<div id="toast" class="toast hidden" role="status"></div>
+
+<script>
+"use strict";
+/* ---------- utilidades ---------- */
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+const money = v => (Number(v) || 0).toLocaleString('pt-BR', {style:'currency', currency:'BRL'});
+const fdate = d => d ? d.split('-').reverse().join('/') : '';
+const today = () => new Date(Date.now() - new Date().getTimezoneOffset()*60000).toISOString().slice(0,10);
+const norm = s => String(s ?? '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+const parseMoney = s => { const n = parseFloat(String(s).replace(/\./g,'').replace(',', '.')); return isNaN(n) ? 0 : n; };
+const moneyIn = v => (v == null || v === '') ? '' : String(v).replace('.', ',');
+const pad = n => String(n).padStart(4, '0');
+const maskCPF = v => { v = v.replace(/\D/g,'').slice(0,11); return v.replace(/(\d{3})(\d)/,'$1.$2').replace(/(\d{3})(\d)/,'$1.$2').replace(/(\d{3})(\d{1,2})$/,'$1-$2'); };
+
+let toastTimer;
+function toast(msg){ const t = $('#toast'); t.textContent = msg; t.classList.remove('hidden'); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.add('hidden'), 2600); }
+
+/* ---------- banco de dados no aparelho (IndexedDB) ---------- */
+const STORES = ['clientes','consertos','estoque','equip','arquivos'], TOMB = 'lixeira';
+let idb = null, memOnly = false;
+function openDB(){
+  return new Promise((res, rej) => {
+    if (!window.indexedDB) return rej(new Error('sem indexedDB'));
+    const r = indexedDB.open('bancada-oficina', 2);
+    r.onupgradeneeded = () => { STORES.concat(TOMB).forEach(n => { if (!r.result.objectStoreNames.contains(n)) r.result.createObjectStore(n, {keyPath:'id'}); }); };
+    r.onsuccess = () => res(r.result);
+    r.onerror = () => rej(r.error);
+    r.onblocked = () => rej(new Error('bloqueado'));
+  });
+}
+function tx(store, mode, fn){
+  return new Promise((res, rej) => {
+    if (!idb) return res([]);
+    const t = idb.transaction(store, mode);
+    const rq = fn(t.objectStore(store));
+    t.oncomplete = () => res(rq ? rq.result : undefined);
+    t.onerror = () => rej(t.error);
+    t.onabort = () => rej(t.error);
+  });
+}
+const dbAll = n => tx(n, 'readonly', s => s.getAll());
+const dbPut = async (n, o) => { o._u = Date.now(); try { await tx(n, 'readwrite', s => s.put(o)); syQueue(); } catch(e){ toast('Não consegui salvar. Faça um backup.'); } };
+const dbDel = async (n, id) => { try { await tx(n, 'readwrite', s => s.delete(id)); await tx(TOMB, 'readwrite', s => s.put({id:n + ':' + id, _u:Date.now()})); syQueue(); } catch(e){ toast('Não consegui excluir.'); } };
+const dbClear = n => tx(n, 'readwrite', s => s.clear());
+
+/* ---------- estado ---------- */
+const S = {clientes:[], consertos:[], estoque:[], equip:[]};
+let route = {v:'clientes'}, stack = [];
+const ui = {q:'', est:'todos', cat:'todas', cst:'todos'};
+const filesCache = {};
+const CATS = ['Aparelhos de som','Televisões','Rádios','Diversos'];
+
+function go(r){ stack.push(route); route = r; ui.q = ''; render(); window.scrollTo(0,0); }
+function tab(v){ stack = []; route = {v}; ui.q = ''; ui.est = 'todos'; ui.cat = 'todas'; ui.cst = 'todos'; render(); window.scrollTo(0,0); }
+function back(){ route = stack.pop() || {v:'clientes'}; ui.q = ''; render(); }
+
+/* ---------- formulário em folha inferior ---------- */
+function closeLayer(){ $('#layer').innerHTML = ''; }
+function fieldHtml(f, v){
+  const id = 'f_' + f.k, ph = esc(f.ph || '');
+  let inp;
+  if (f.t === 'area') inp = `<textarea id="${id}" rows="3" placeholder="${ph}">${esc(v ?? '')}</textarea>`;
+  else if (f.t === 'select') inp = `<select id="${id}">${f.opts.map(([k,l]) => `<option value="${esc(k)}"${k === (v ?? '') ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select>`;
+  else if (f.t === 'combo') inp = `<input id="${id}" list="${id}_l" value="${esc(v ?? '')}" placeholder="${ph}" autocomplete="off"><datalist id="${id}_l">${f.list.map(x => `<option value="${esc(x)}">`).join('')}</datalist>`;
+  else {
+    const type = {num:'number', date:'date', tel:'tel', url:'url'}[f.t] || 'text';
+    const extra = f.t === 'money' ? ' inputmode="decimal"' : f.t === 'num' ? ' inputmode="numeric" min="0" step="1"' : f.t === 'cpf' ? ' inputmode="numeric"' : '';
+    const val = f.t === 'money' ? moneyIn(v) : (v ?? '');
+    inp = `<input id="${id}" type="${type}"${extra} value="${esc(val)}" placeholder="${ph}">`;
+  }
+  return `<label class="fld"><span>${esc(f.l)}</span>${inp}</label>`;
+}
+function openForm({title, fields, values = {}, onSave, onDelete, saveLabel = 'Salvar'}){
+  $('#layer').innerHTML = `<div class="scrim" data-act="close"></div>
+  <div class="sheet" role="dialog" aria-label="${esc(title)}"><h2>${esc(title)}</h2>
+  ${fields.map(f => fieldHtml(f, values[f.k])).join('')}
+  <div class="btns"><button class="btn ghost" data-act="close">Cancelar</button><button class="btn" id="fsave">${saveLabel}</button></div>
+  ${onDelete ? '<div class="btns"><button class="btn danger" id="fdel">Excluir</button></div>' : ''}</div>`;
+  const cpf = $('#f_cpf'); if (cpf) cpf.addEventListener('input', () => { cpf.value = maskCPF(cpf.value); });
+  $('#fsave').onclick = async () => {
+    const out = {}; let bad = null;
+    for (const f of fields){
+      const el = $('#f_' + f.k); let val = el.value.trim();
+      if (f.req && !val){ el.classList.add('bad'); bad = bad || f; continue; }
+      if (f.t === 'money') val = parseMoney(val);
+      else if (f.t === 'num') val = val === '' ? 0 : Math.max(0, Number(val));
+      out[f.k] = val;
+    }
+    if (bad){ toast('Preencha: ' + bad.l); return; }
+    closeLayer(); await onSave(out); render();
+  };
+  if (onDelete) $('#fdel').onclick = () => confirmDlg('Excluir de vez? Isso não pode ser desfeito.', async () => { await onDelete(); render(); });
+  const first = $('.sheet input, .sheet textarea'); if (first && !first.value) setTimeout(() => first.focus(), 60);
+}
+function confirmDlg(msg, onYes, yes = 'Excluir'){
+  $('#layer').innerHTML = `<div class="scrim" data-act="close"></div><div class="sheet" role="alertdialog"><h2>${esc(msg)}</h2>
+  <div class="btns"><button class="btn ghost" data-act="close">Cancelar</button><button class="btn ${yes === 'Excluir' ? 'danger' : ''}" id="cyes">${yes}</button></div></div>`;
+  $('#cyes').onclick = async () => { closeLayer(); await onYes(); };
+}
+
+/* ---------- Clientes ---------- */
+function clienteFields(){ return [
+  {k:'nome', l:'Nome', req:true}, {k:'cpf', l:'CPF', t:'cpf', ph:'000.000.000-00'},
+  {k:'tel', l:'Telefone / WhatsApp', t:'tel'}, {k:'end', l:'Endereço'}, {k:'obs', l:'Observações', t:'area'}]; }
+function listClientes(){
+  const q = norm(ui.q);
+  const l = S.clientes.filter(c => !q || norm(c.nome + ' ' + c.cpf + ' ' + c.tel).includes(q)).sort((a,b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+  if (!l.length) return S.clientes.length ? '<div class="empty">Nenhum cliente encontrado.</div>' : '<div class="empty"><b>Nenhum cliente ainda</b>Toque em “Novo cliente” para cadastrar o primeiro.</div>';
+  return l.map(c => {
+    const cs = S.consertos.filter(x => x.clienteId === c.id), and = cs.filter(x => x.status === 'andamento').length;
+    return `<button class="row" data-act="open-cliente" data-id="${c.id}"><div class="grow"><b>${esc(c.nome)}</b><small>${esc([c.cpf, c.tel].filter(Boolean).join('  ·  ') || 'Sem CPF/telefone')}</small></div>
+    <div class="meta">${cs.length} conserto${cs.length === 1 ? '' : 's'}${and ? `<br><span class="pill c" style="--stc:var(--c-low)">${and} em andamento</span>` : ''}</div></button>`;
+  }).join('');
+}
+function viewClientes(){
+  return `<div class="search"><input id="q" type="search" placeholder="Buscar por nome, CPF ou telefone" value="${esc(ui.q)}" autocomplete="off"></div>
+  <div id="list">${listClientes()}</div><button class="fab" data-act="novo-cliente">+ Novo cliente</button>`;
+}
+const STATUS = {andamento:['Em andamento','var(--c-low)'], pronto:['Pronto','var(--c-ok)'], retirado:['Retirado','var(--c-ret)']};
+const stOf = x => STATUS[x.status] || STATUS.andamento;
+const stPill = x => `<span class="pill c" style="--stc:${stOf(x)[1]}">${stOf(x)[0]}</span>`;
+function conRow(x, showCli){
+  const st = stOf(x), c = showCli ? S.clientes.find(k => k.id === x.clienteId) : null;
+  const sub = [c ? c.nome : '', fdate(x.data), x.valor ? money(x.valor) : ''].filter(Boolean).join('  ·  ');
+  return `<button class="row st" style="--stc:${st[1]};align-items:flex-start" data-act="open-conserto" data-id="${x.id}"><div class="grow"><b>${esc(x.aparelho || 'Aparelho')}</b>
+    <small>${esc(sub)}</small>${x.defeito ? `<small style="white-space:normal;margin-top:4px">${esc(x.defeito)}</small>` : ''}</div>
+    <div class="meta">${stPill(x)}${x.nfotos ? `<br>📷 ${x.nfotos}` : ''}</div></button>`;
+}
+function viewCliente(){
+  const c = S.clientes.find(x => x.id === route.id);
+  if (!c) return '<div class="empty">Cliente não encontrado.</div>';
+  const cs = S.consertos.filter(x => x.clienteId === c.id).sort((a,b) => (b.data || '').localeCompare(a.data || ''));
+  const ap = S.estoque.filter(x => x.clienteId === c.id);
+  const rows = [['CPF', c.cpf], ['Telefone', c.tel], ['Endereço', c.end], ['Obs.', c.obs]].filter(r => r[1]);
+  return `<div class="card"><h2>${esc(c.nome)}</h2>
+  ${rows.length ? `<dl class="kv">${rows.map(r => `<dt>${r[0]}</dt><dd>${esc(r[1])}</dd>`).join('')}</dl>` : '<p class="sub">Sem outros dados.</p>'}
+  <div class="actions"><button class="btn small ghost" data-act="ed-cliente" data-id="${c.id}">Editar dados</button></div></div>
+  ${ap.length ? `<div class="group">Aparelhos dele na oficina</div>${ap.map(a => `<button class="row" data-act="open-item" data-id="${a.id}"><div class="grow"><b><span class="tag">#${pad(a.numero)}</span>${esc(a.nome)}</b><small>${esc(a.obs || a.local || '')}</small></div>${a.nfotos ? `<div class="meta">📷 ${a.nfotos}</div>` : ''}</button>`).join('')}` : ''}
+  <div class="group">Histórico de consertos (${cs.length})</div>
+  ${cs.length ? cs.map(x => conRow(x, false)).join('') : '<div class="empty">Nenhum conserto registrado.</div>'}
+  <button class="fab" data-act="novo-conserto" data-id="${c.id}">+ Novo conserto</button>`;
+}
+function conFields(withCli){ return [
+  ...(withCli ? [{k:'clienteId', l:'Cliente', t:'select', req:true, opts:[['', 'Escolha o cliente'], ...S.clientes.slice().sort((a,b) => a.nome.localeCompare(b.nome,'pt-BR')).map(c => [c.id, c.nome])]}] : []),
+  {k:'data', l:'Data', t:'date', req:true}, {k:'aparelho', l:'Aparelho', ph:'Ex.: TV Samsung 50"', req:true},
+  {k:'defeito', l:'Defeito relatado', t:'area'}, {k:'servico', l:'O que foi feito', t:'area'},
+  {k:'valor', l:'Valor cobrado (R$)', t:'money', ph:'0,00'},
+  {k:'status', l:'Situação', t:'select', opts:Object.entries(STATUS).map(([k,v]) => [k, v[0]])}]; }
+const fotosSection = () => `<div id="fotos" class="thumbs"></div>
+  <div class="actions" style="margin-top:0"><label class="btn">Tirar foto<input id="cam" type="file" accept="image/*" capture="environment" hidden></label><label class="btn ghost">Escolher da galeria<input id="gal" type="file" accept="image/*" multiple hidden></label></div>`;
+function paintFotos(){
+  const box = $('#fotos'); if (!box) return;
+  const l = filesCache[route.id] || [];
+  box.innerHTML = l.length ? l.map(f => `<button data-act="open-file" data-id="${f.id}" aria-label="Abrir foto">${f.thumb ? `<img alt="" src="${f.thumb}">` : ''}</button>`).join('') : '<div class="sub" style="grid-column:1/-1">Nenhuma foto ainda.</div>';
+}
+function viewConserto(){
+  const x = S.consertos.find(k => k.id === route.id);
+  if (!x) return '<div class="empty">Conserto não encontrado.</div>';
+  const c = S.clientes.find(k => k.id === x.clienteId), st = stOf(x);
+  const rows = [['Defeito', x.defeito], ['Feito', x.servico], ['Valor', x.valor ? money(x.valor) : '']].filter(r => r[1]);
+  return `<div class="card st" style="--stc:${st[1]}"><h2>${esc(x.aparelho)}</h2><div class="sub">${c ? esc(c.nome) + '  ·  ' : ''}${fdate(x.data)}</div>
+  <div class="group" style="margin-top:14px">Situação</div>
+  <div class="statusbtns">${Object.entries(STATUS).map(([k, v]) => `<button style="--stc:${v[1]}" data-act="set-status" data-s="${k}" aria-pressed="${x.status === k}">${v[0]}</button>`).join('')}</div>
+  ${rows.length ? `<dl class="kv">${rows.map(r => `<dt>${r[0]}</dt><dd>${esc(r[1])}</dd>`).join('')}</dl>` : ''}
+  <div class="actions"><button class="btn small ghost" data-act="ed-conserto" data-id="${x.id}">Editar</button></div></div>
+  <div class="group">Fotos do aparelho</div>${fotosSection()}`;
+}
+const CST_ORDER = {andamento:0, pronto:1, retirado:2};
+function listConsertos(){
+  const q = norm(ui.q);
+  const l = S.consertos.filter(x => { const c = S.clientes.find(k => k.id === x.clienteId); return (ui.cst === 'todos' || x.status === ui.cst) && (!q || norm(`${x.aparelho} ${c ? c.nome : ''} ${x.defeito}`).includes(q)); })
+    .sort((a,b) => (CST_ORDER[a.status] ?? 0) - (CST_ORDER[b.status] ?? 0) || (b.data || '').localeCompare(a.data || ''));
+  if (!l.length) return S.consertos.length ? '<div class="empty">Nenhum conserto nessa situação.</div>' : '<div class="empty"><b>Nenhum conserto ainda</b>Toque em “Novo conserto” ou abra um cliente para registrar.</div>';
+  return l.map(x => conRow(x, true)).join('');
+}
+function viewConsertos(){
+  const n = k => S.consertos.filter(x => x.status === k).length;
+  const chip = (k, t, col) => `<button class="chip" data-act="cst-f" data-f="${k}" aria-pressed="${ui.cst === k}">${col ? `<span class="dot" style="--stc:${col}"></span>` : ''}${t}</button>`;
+  return `<div class="search"><input id="q" type="search" placeholder="Buscar aparelho ou cliente" value="${esc(ui.q)}" autocomplete="off"></div>
+  <div class="chips">${chip('todos','Todos')}${Object.entries(STATUS).map(([k, v]) => chip(k, `${v[0]} (${n(k)})`, v[1])).join('')}</div>
+  <div id="list">${listConsertos()}</div><button class="fab" data-act="novo-conserto-geral">+ Novo conserto</button>`;
+}
+
+/* ---------- Estoque ---------- */
+function estoqueStatus(i){ if (i.tipo !== 'peca') return null; if (i.qtd <= 0) return 'zero'; if (i.min > 0 && i.qtd <= i.min) return 'low'; return null; }
+const stockColor = i => i.tipo !== 'peca' ? 'var(--muted)' : ({zero:'var(--c-zero)', low:'var(--c-low)'}[estoqueStatus(i)] || 'var(--c-ok)');
+const fixUrl = u => { u = (u || '').trim(); return u && !/^https?:\/\//i.test(u) ? 'https://' + u : u; };
+function estFields(){ return [
+  {k:'tipo', l:'Tipo', t:'select', opts:[['peca','Peça / componente'],['aparelho','Aparelho de cliente']]},
+  {k:'nome', l:'Nome / descrição', req:true, ph:'Ex.: Capacitor 470µF 25V'},
+  {k:'qtd', l:'Quantidade', t:'num'}, {k:'min', l:'Ficar laranja quando restar (peças)', t:'num', ph:'0 = nunca'},
+  {k:'valor', l:'Valor unitário (R$)', t:'money', ph:'0,00'}, {k:'local', l:'Onde está guardado', ph:'Gaveta 3, prateleira B...'},
+  {k:'link', l:'Link para comprar (Mercado Livre, Shopee, AliExpress...)', t:'url', ph:'Cole aqui o link do produto ou da pesquisa'},
+  {k:'clienteId', l:'Cliente (se for aparelho dele)', t:'select', opts:[['', '— nenhum —'], ...S.clientes.slice().sort((a,b) => a.nome.localeCompare(b.nome,'pt-BR')).map(c => [c.id, c.nome])]},
+  {k:'obs', l:'Observações', t:'area'}]; }
+function listEstoque(){
+  const q = norm(ui.q);
+  let l = S.estoque.filter(i => !q || norm(`${i.nome} ${i.local} ${i.numero} ${pad(i.numero)} ${i.obs}`).includes(q));
+  if (ui.est === 'peca') l = l.filter(i => i.tipo === 'peca');
+  if (ui.est === 'aparelho') l = l.filter(i => i.tipo === 'aparelho');
+  if (ui.est === 'low') l = l.filter(i => estoqueStatus(i));
+  l.sort((a,b) => a.numero - b.numero);
+  if (!l.length) return S.estoque.length ? '<div class="empty">Nada por aqui.</div>' : '<div class="empty"><b>Estoque vazio</b>Cadastre peças e aparelhos que chegam. Cada item ganha um número.</div>';
+  return l.map(i => {
+    const st = estoqueStatus(i), cli = i.clienteId ? S.clientes.find(c => c.id === i.clienteId) : null;
+    const sub = [i.local, cli ? 'Cliente: ' + cli.nome : '', i.valor ? money(i.valor) : ''].filter(Boolean).join('  ·  ');
+    return `<div class="row st" style="--stc:${stockColor(i)}"><div class="grow"><button class="plain" data-act="${i.tipo === 'aparelho' ? 'open-item' : 'ed-est'}" data-id="${i.id}">
+      <b><span class="tag">#${pad(i.numero)}</span>${esc(i.nome)}</b><small>${esc(sub) || '&nbsp;'}</small></button>
+      ${i.tipo === 'aparelho' ? `<span class="pill">Aparelho${i.nfotos ? ' · 📷 ' + i.nfotos : ''}</span>` : ''}
+      ${st && i.link ? `<a class="buy" href="${esc(i.link)}" target="_blank" rel="noopener">Comprar</a>` : ''}</div>
+      ${i.tipo === 'peca' ? `<div class="qty"><button data-act="qtd" data-id="${i.id}" data-d="-1" aria-label="Diminuir">−</button><span class="n num">${i.qtd}</span><button data-act="qtd" data-id="${i.id}" data-d="1" aria-label="Aumentar">+</button></div>` : ''}</div>`;
+  }).join('');
+}
+function viewEstoque(){
+  const nLow = S.estoque.filter(estoqueStatus).length;
+  const chip = (k, t, col) => `<button class="chip" data-act="est-f" data-f="${k}" aria-pressed="${ui.est === k}">${col ? `<span class="dot" style="--stc:${col}"></span>` : ''}${t}</button>`;
+  return `<div class="search"><input id="q" type="search" placeholder="Buscar peça, número ou local" value="${esc(ui.q)}" autocomplete="off"></div>
+  <div class="chips">${chip('todos','Tudo')}${chip('peca','Peças')}${chip('aparelho','Aparelhos de clientes')}${chip('low','Repor' + (nLow ? ` (${nLow})` : ''), 'var(--c-low)')}</div>
+  <div id="list">${listEstoque()}</div><button class="fab" data-act="novo-est">+ Novo item</button>`;
+}
+function viewItem(){
+  const i = S.estoque.find(x => x.id === route.id);
+  if (!i) return '<div class="empty">Item não encontrado.</div>';
+  const cli = i.clienteId ? S.clientes.find(c => c.id === i.clienteId) : null;
+  const rows = [['Cliente', cli && cli.nome], ['Guardado em', i.local], ['Obs.', i.obs]].filter(r => r[1]);
+  return `<div class="card"><h2><span class="tag">#${pad(i.numero)}</span>${esc(i.nome)}</h2>
+  ${rows.length ? `<dl class="kv">${rows.map(r => `<dt>${r[0]}</dt><dd>${esc(r[1])}</dd>`).join('')}</dl>` : ''}
+  <div class="actions"><button class="btn small ghost" data-act="ed-est" data-id="${i.id}">Editar</button></div></div>
+  <div class="group">Fotos do aparelho</div>${fotosSection()}`;
+}
+
+/* ---------- Equipamentos ---------- */
+const catsAll = () => [...new Set([...CATS, ...S.equip.map(e => e.categoria).filter(Boolean)])];
+const eqName = e => [e.marca, e.modelo].filter(Boolean).join(' ');
+function listEquips(){
+  const q = norm(ui.q);
+  let l = S.equip.filter(e => (ui.cat === 'todas' || e.categoria === ui.cat) && (!q || norm(`${e.marca} ${e.modelo} ${e.categoria}`).includes(q)));
+  if (!l.length) return S.equip.length ? '<div class="empty">Nada encontrado.</div>' : '<div class="empty"><b>Biblioteca vazia</b>Cadastre o primeiro equipamento para guardar esquema elétrico, anotações, peças semelhantes e valores.</div>';
+  const by = {};
+  l.forEach(e => (by[e.categoria || 'Sem categoria'] ||= []).push(e));
+  return Object.keys(by).sort((a,b) => a.localeCompare(b,'pt-BR')).map(k =>
+    `<div class="group">${esc(k)}</div>` + by[k].sort((a,b) => eqName(a).localeCompare(eqName(b),'pt-BR')).map(e =>
+    `<button class="row" data-act="open-equip" data-id="${e.id}"><div class="grow"><b>${esc(eqName(e) || 'Sem nome')}</b>
+    <small>${(e.pecas||[]).length} peças  ·  ${(e.semelhantes||[]).length} semelhantes${e.comentarios ? '  ·  com anotações' : ''}</small></div></button>`).join('')).join('');
+}
+function viewEquips(){
+  const cats = [...new Set(S.equip.map(e => e.categoria).filter(Boolean))].sort((a,b) => a.localeCompare(b,'pt-BR'));
+  const chip = (k, t) => `<button class="chip" data-act="cat-f" data-f="${esc(k)}" aria-pressed="${ui.cat === k}">${esc(t)}</button>`;
+  return `<div class="search"><input id="q" type="search" placeholder="Buscar marca ou modelo" value="${esc(ui.q)}" autocomplete="off"></div>
+  ${cats.length > 1 ? `<div class="chips">${chip('todas','Todas')}${cats.map(c => chip(c,c)).join('')}</div>` : ''}
+  <div id="list">${listEquips()}</div><button class="fab" data-act="novo-equip">+ Novo equipamento</button>`;
+}
+function eqFields(){ return [
+  {k:'categoria', l:'Categoria', t:'combo', list:catsAll(), req:true, ph:'Escolha ou digite uma nova'},
+  {k:'marca', l:'Marca', req:true}, {k:'modelo', l:'Modelo', req:true}]; }
+function viewEquip(){
+  const e = S.equip.find(x => x.id === route.id);
+  if (!e) return '<div class="empty">Equipamento não encontrado.</div>';
+  const sub = route.sub || 'esquema';
+  const nf = (filesCache[e.id] || []).length;
+  const tabs = [['esquema', 'Esquema' + (nf ? ` (${nf})` : '')], ['valores', 'Valores'], ['semelhantes', 'Semelhantes'], ['notas', 'Anotações']];
+  let body = '';
+  if (sub === 'esquema'){
+    body = `<div id="files"><div class="empty">Carregando…</div></div>
+    <label class="btn" style="display:block;text-align:center;margin-top:8px">+ Adicionar esquema (foto ou PDF)<input id="up" type="file" accept="image/*,application/pdf" multiple hidden></label>
+    <p class="sub">Os arquivos ficam guardados neste celular e abrem dentro do app.</p>`;
+  } else if (sub === 'valores'){
+    const p = e.pecas || [], tot = p.reduce((s, x) => s + (Number(x.valor) || 0), 0);
+    body = `<p class="sub" style="margin-top:0">Preço de cada peça deste equipamento. Quando o mercado mudar, toque na peça e atualize.</p>
+    ${p.length ? p.map(x => `<button class="row" data-act="ed-peca" data-id="${x.id}"><div class="grow"><b>${esc(x.nome)}</b><small>atualizado em ${fdate(x.data)}</small></div><b class="num" style="flex:none">${money(x.valor)}</b></button>`).join('') + `<div class="card" style="display:flex;justify-content:space-between"><b>Total das peças</b><b class="num">${money(tot)}</b></div>` : '<div class="empty">Nenhuma peça cadastrada.</div>'}
+    <button class="btn" data-act="nova-peca">+ Adicionar peça</button>`;
+  } else if (sub === 'semelhantes'){
+    const s = e.semelhantes || [];
+    body = `<p class="sub" style="margin-top:0">Modelos ou peças parecidas que podem substituir quando faltar o original.</p>
+    ${s.length ? s.map(x => `<button class="row" data-act="ed-sem" data-id="${x.id}"><div class="grow"><b>${esc(x.nome)}</b>${x.obs ? `<small style="white-space:normal">${esc(x.obs)}</small>` : ''}</div></button>`).join('') : '<div class="empty">Nenhum semelhante cadastrado.</div>'}
+    <button class="btn" data-act="nova-sem">+ Adicionar semelhante</button>`;
+  } else {
+    body = `<textarea id="notas" class="notes" placeholder="Anote aqui o que você descobrir: pontos de teste, defeitos comuns, tensões, o que não está no manual...">${esc(e.comentarios || '')}</textarea><div class="saved" id="saved"></div>`;
+  }
+  return `<div class="card"><h2>${esc(eqName(e))}</h2><div class="sub">${esc(e.categoria)}</div>
+  <div class="actions"><button class="btn small ghost" data-act="ed-equip" data-id="${e.id}">Editar</button></div></div>
+  <div class="seg" role="tablist">${tabs.map(t => `<button role="tab" data-act="sub" data-s="${t[0]}" aria-selected="${sub === t[0]}">${t[1]}</button>`).join('')}</div>${body}`;
+}
+async function loadFiles(eid){
+  const all = await dbAll('arquivos');
+  filesCache[eid] = all.filter(f => f.equipId === eid).sort((a,b) => a.criado - b.criado);
+  return filesCache[eid];
+}
+function paintFiles(){
+  const box = $('#files'); if (!box) return;
+  const l = filesCache[route.id] || [];
+  box.innerHTML = l.length ? l.map(f => `<div class="row"><button style="all:unset;flex:1;min-width:0;cursor:pointer" data-act="open-file" data-id="${f.id}"><b>${f.tipo === 'application/pdf' ? 'PDF' : 'Imagem'} · ${esc(f.nome)}</b><small>${(f.tam/1024/1024).toFixed(1)} MB · toque para abrir</small></button>
+    <button class="btn small danger" data-act="del-file" data-id="${f.id}">Excluir</button></div>`).join('') : '<div class="empty"><b>Sem esquema ainda</b>Adicione uma foto ou PDF do esquema elétrico.</div>';
+}
+async function shrink(file, max = 2800, minSize = 1.5*1024*1024, q = 0.88){
+  if (!file.type.startsWith('image/') || file.size < minSize) return file;
+  try {
+    const bmp = await createImageBitmap(file), k = Math.min(1, max / Math.max(bmp.width, bmp.height));
+    const c = document.createElement('canvas'); c.width = Math.round(bmp.width*k); c.height = Math.round(bmp.height*k);
+    c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+    const b = await new Promise(r => c.toBlob(r, 'image/jpeg', q));
+    return b && (b.size < file.size || minSize === 0) ? b : file;
+  } catch(e){ return file; }
+}
+async function makeThumb(blob){
+  try {
+    const bmp = await createImageBitmap(blob), k = Math.min(1, 360 / Math.max(bmp.width, bmp.height));
+    const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(bmp.width*k)); c.height = Math.max(1, Math.round(bmp.height*k));
+    c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+    return c.toDataURL('image/jpeg', 0.7);
+  } catch(e){ try { return await blobToDataURL(blob); } catch(_){ return ''; } }
+}
+async function addFotos(files){
+  const isCon = route.v === 'conserto', owner = (isCon ? S.consertos : S.estoque).find(x => x.id === route.id);
+  if (!owner) return; let n = 0;
+  for (const f of files){
+    if (!f.type.startsWith('image/')) continue;
+    const b = await shrink(f, 1800, 0, 0.85), thumb = await makeThumb(b);
+    await dbPut('arquivos', {id:uid(), equipId:owner.id, nome:f.name || 'foto.jpg', tipo:b.type || 'image/jpeg', blob:b, tam:b.size, criado:Date.now(), foto:true, thumb}); n++;
+  }
+  if (n){ owner.nfotos = (owner.nfotos || 0) + n; await dbPut(isCon ? 'consertos' : 'estoque', owner); await loadFiles(owner.id); toast(n + ' foto(s) salva(s).'); render(); }
+}
+async function deleteFile(f){
+  await dbDel('arquivos', f.id);
+  if (f.foto){
+    const o = S.consertos.find(x => x.id === f.equipId) || S.estoque.find(x => x.id === f.equipId);
+    if (o){ o.nfotos = Math.max(0, (o.nfotos || 1) - 1); await dbPut(S.consertos.includes(o) ? 'consertos' : 'estoque', o); }
+  }
+  await loadFiles(f.equipId);
+}
+async function delFotosOf(oid){ for (const f of await dbAll('arquivos')) if (f.equipId === oid) await dbDel('arquivos', f.id); delete filesCache[oid]; }
+const blobToDataURL = b => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(b); });
+function dataURLToBlob(u){ const [h, d] = u.split(','), m = /:(.*?);/.exec(h)[1], bin = atob(d), a = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) a[i] = bin.charCodeAt(i); return new Blob([a], {type:m}); }
+
+/* ---------- visualizador de esquema ---------- */
+let vw = {file:null, zoom:1, url:null};
+async function openViewer(f){
+  vw = {file:f, zoom:1, url:null};
+  const v = $('#viewer'); v.classList.remove('hidden');
+  v.innerHTML = `<div class="bar"><button data-act="vclose" aria-label="Fechar">✕</button><div class="ttl">${esc(f.nome)}</div>${f.foto ? '<button data-act="vdel" aria-label="Excluir foto">🗑</button>' : ''}<button data-act="vz" data-d="-0.5" aria-label="Diminuir zoom">−</button><button data-act="vz" data-d="0.5" aria-label="Aumentar zoom">+</button></div><div class="body" id="vbody"><div class="msg">Abrindo…</div></div>`;
+  if (f.tipo !== 'application/pdf'){ try { vw.url = await blobToDataURL(f.blob); } catch(e){ $('#vbody').innerHTML = '<div class="msg">Não consegui abrir este arquivo.</div>'; return; } }
+  paintViewer();
+}
+async function paintViewer(){
+  const body = $('#vbody'), f = vw.file; if (!body) return;
+  const keepX = body.scrollLeft, keepY = body.scrollTop;
+  if (f.tipo !== 'application/pdf'){
+    body.innerHTML = `<img alt="${esc(f.nome)}" src="${vw.url}" style="width:${vw.zoom*100}%;max-width:none">`;
+  } else {
+    const lib = window.pdfjsLib;
+    if (!lib){ body.innerHTML = '<div class="msg">Não consegui carregar o leitor de PDF Dica: tire uma foto ou print do esquema e adicione como imagem.</div>'; return; }
+    body.innerHTML = '<div class="msg">Carregando PDF…</div>';
+    try {
+      lib.GlobalWorkerOptions.workerSrc = 'pdf.worker.min.js';
+      const pdf = await lib.getDocument({data: await f.blob.arrayBuffer()}).promise;
+      const mine = vw.file, myZoom = vw.zoom, w = Math.max(280, body.clientWidth * vw.zoom), dpr = Math.min(2, window.devicePixelRatio || 1);
+      body.innerHTML = '';
+      for (let i = 1; i <= pdf.numPages; i++){
+        if (vw.file !== mine || vw.zoom !== myZoom) return;
+        const page = await pdf.getPage(i), v0 = page.getViewport({scale:1});
+        const sc = Math.min(w * dpr / v0.width, 4000 / v0.width), vp = page.getViewport({scale:sc});
+        const c = document.createElement('canvas'); c.width = vp.width; c.height = vp.height; c.style.width = w + 'px';
+        body.appendChild(c);
+        await page.render({canvasContext:c.getContext('2d'), viewport:vp}).promise;
+      }
+    } catch(e){ body.innerHTML = '<div class="msg">Não consegui abrir este PDF aqui. Dica: tire um print das páginas do esquema e adicione como imagem.</div>'; return; }
+  }
+  body.scrollLeft = keepX; body.scrollTop = keepY;
+}
+function closeViewer(){ $('#viewer').classList.add('hidden'); $('#viewer').innerHTML = ''; vw = {file:null, zoom:1, url:null}; }
+
+/* ---------- Backup ---------- */
+function viewBackup(){
+  const nf = S.__arqCount ?? 0;
+  return `${memOnly ? '<div class="warnbox"><b>Atenção:</b> este navegador não permitiu guardar dados. O que você cadastrar some ao fechar. Abra o link no Chrome do celular.</div>' : ''}
+  <div class="card"><h2>Seus dados</h2><dl class="kv">
+  <dt>Clientes</dt><dd class="num">${S.clientes.length}</dd><dt>Consertos</dt><dd class="num">${S.consertos.length}</dd>
+  <dt>Itens no estoque</dt><dd class="num">${S.estoque.length}</dd><dt>Equipamentos</dt><dd class="num">${S.equip.length}</dd><dt>Esquemas</dt><dd class="num" id="nArq">${nf}</dd></dl></div>
+  <div class="card" id="syncbox">${syBoxHTML()}</div>
+  <div class="card"><h2>Cópia manual em arquivo</h2><p class="sub">Sem a sincronização, tudo fica salvo só neste celular. Se limpar os dados do Chrome ou trocar de aparelho, perde tudo. Faça uma cópia de vez em quando: ao tocar no botão abre o menu de compartilhar, e aí é só mandar para o Drive ou para o WhatsApp.</p>
+  <div class="actions"><button class="btn" data-act="export">Salvar cópia de segurança</button>
+  <label class="btn ghost" style="display:inline-block">Restaurar uma cópia<input id="imp" type="file" accept=".json,application/json" hidden></label></div></div>`;
+}
+async function doExport(){
+  toast('Preparando cópia…');
+  const out = {app:'bancada', versao:1, data:new Date().toISOString(), clientes:S.clientes, consertos:S.consertos, estoque:S.estoque, equip:S.equip, arquivos:[]};
+  for (const f of await dbAll('arquivos')) out.arquivos.push({...f, blob:await blobToDataURL(f.blob)});
+  const json = JSON.stringify(out), name = `eletronica-osmar-copia-${today()}.json`;
+  const P = window.Capacitor && window.Capacitor.Plugins;
+  if (P && P.Filesystem && P.Share){
+    try {
+      const r = await P.Filesystem.writeFile({path:name, data:json, directory:'CACHE', encoding:'utf8'});
+      await P.Share.share({title:'Cópia Eletrônica Osmar', files:[r.uri], dialogTitle:'Guardar cópia em...'});
+    } catch(e){ if (!/cancel/i.test(String(e && e.message))) toast('Não consegui gerar a cópia.'); }
+    return;
+  }
+  try {
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([json], {type:'application/json'})); a.download = name; document.body.appendChild(a); a.click(); a.remove();
+  } catch(e){ toast('Não consegui gerar a cópia.'); }
+}
+async function doImport(file){
+  let d; try { d = JSON.parse(await file.text()); if (d.app !== 'bancada') throw 0; } catch(e){ toast('Esse arquivo não é uma cópia da Bancada.'); return; }
+  confirmDlg(`Restaurar a cópia de ${d.data ? fdate(d.data.slice(0,10)) : 'data desconhecida'}? Os dados atuais serão substituídos.`, async () => {
+    for (const n of STORES) for (const o of await dbAll(n)) await tx(TOMB, 'readwrite', s => s.put({id:n + ':' + o.id, _u:Date.now() - 1000}));
+    for (const n of STORES) await dbClear(n);
+    for (const k of ['clientes','consertos','estoque','equip']){ S[k] = d[k] || []; for (const o of S[k]) await dbPut(k, o); }
+    for (const f of d.arquivos || []) await dbPut('arquivos', {...f, blob:dataURLToBlob(f.blob)});
+    Object.keys(filesCache).forEach(k => delete filesCache[k]);
+    toast('Cópia restaurada.'); render();
+  }, 'Restaurar');
+}
+
+/* ---------- render ---------- */
+const TITLES = {clientes:'Clientes', cliente:'Cliente', consertos:'Consertos', conserto:'Conserto', item:'Aparelho', estoque:'Estoque', equips:'Equipamentos', equip:'Equipamento', backup:'Backup'};
+function render(){
+  const v = route.v, app = $('#app');
+  const views = {clientes:viewClientes, cliente:viewCliente, consertos:viewConsertos, conserto:viewConserto, item:viewItem, estoque:viewEstoque, equips:viewEquips, equip:viewEquip, backup:viewBackup};
+  app.innerHTML = views[v]();
+  $('#title').textContent = v === 'equip' ? (eqName(S.equip.find(e => e.id === route.id) || {}) || 'Equipamento') : v === 'cliente' ? (S.clientes.find(c => c.id === route.id)?.nome || 'Cliente') : v === 'conserto' ? (S.consertos.find(c => c.id === route.id)?.aparelho || 'Conserto') : TITLES[v];
+  $('#back').classList.toggle('hidden', !stack.length);
+  const rootOf = r => ({cliente:'clientes', conserto:'consertos', item:'estoque', equip:'equips'}[r.v] || r.v), root = stack.length ? rootOf(stack[0]) : rootOf(route);
+  document.querySelectorAll('#tabs button').forEach(b => { if (b.dataset.v === root) b.setAttribute('aria-current','page'); else b.removeAttribute('aria-current'); });
+  if (v === 'equip' && (route.sub || 'esquema') === 'esquema'){ const id = route.id; loadFiles(id).then(() => { if (route.v === 'equip' && route.id === id && (route.sub || 'esquema') === 'esquema') paintFiles(); }); }
+  if (v === 'equip' && (route.sub || 'esquema') === 'notas') bindNotes();
+  if (v === 'conserto' || v === 'item'){ const id = route.id; loadFiles(id).then(() => { if (route.id === id) paintFotos(); }); }
+  ['cam','gal'].forEach(k => { const el = $('#' + k); if (el) el.onchange = async () => { const fl = [...el.files]; el.value = ''; await addFotos(fl); }; });
+  if (v === 'backup') dbAll('arquivos').then(a => { const el = $('#nArq'); if (el) el.textContent = a.length; });
+  const up = $('#up'); if (up) up.onchange = async () => {
+    const e = S.equip.find(x => x.id === route.id); let n = 0;
+    for (const f of up.files){
+      if (!(f.type.startsWith('image/') || f.type === 'application/pdf')){ toast('Só imagem ou PDF.'); continue; }
+      const b = await shrink(f);
+      await dbPut('arquivos', {id:uid(), equipId:e.id, nome:f.name, tipo:b.type || f.type, blob:b, tam:b.size, criado:Date.now()}); n++;
+    }
+    if (n){ await loadFiles(e.id); toast(n + ' arquivo(s) adicionado(s).'); render(); }
+  };
+  const imp = $('#imp'); if (imp) imp.onchange = () => { if (imp.files[0]) doImport(imp.files[0]); imp.value = ''; };
+}
+function bindNotes(){
+  const t = $('#notas'); if (!t) return; let timer;
+  t.addEventListener('input', () => {
+    $('#saved').textContent = 'Salvando…'; clearTimeout(timer);
+    timer = setTimeout(async () => { const e = S.equip.find(x => x.id === route.id); if (!e) return; e.comentarios = t.value; await dbPut('equip', e); const s = $('#saved'); if (s) s.textContent = 'Salvo neste celular'; }, 500);
+  });
+}
+
+/* ---------- ações ---------- */
+const act = {
+  back, close: closeLayer, vclose: closeViewer,
+  tab: el => tab(el.dataset.v),
+  'open-cliente': el => go({v:'cliente', id:el.dataset.id}),
+  'novo-cliente': () => openForm({title:'Novo cliente', fields:clienteFields(), onSave: async v => { const c = {id:uid(), ...v}; S.clientes.push(c); await dbPut('clientes', c); }}),
+  'ed-cliente': el => { const c = S.clientes.find(x => x.id === el.dataset.id); openForm({title:'Editar cliente', fields:clienteFields(), values:c,
+    onSave: async v => { Object.assign(c, v); await dbPut('clientes', c); },
+    onDelete: async () => { for (const x of S.consertos.filter(k => k.clienteId === c.id)){ await dbDel('consertos', x.id); await delFotosOf(x.id); } S.consertos = S.consertos.filter(k => k.clienteId !== c.id);
+      for (const i of S.estoque.filter(k => k.clienteId === c.id)){ i.clienteId = ''; await dbPut('estoque', i); }
+      S.clientes = S.clientes.filter(k => k.id !== c.id); await dbDel('clientes', c.id); stack = []; route = {v:'clientes'}; }}); },
+  'novo-conserto': el => openForm({title:'Novo conserto', fields:conFields(), values:{data:today(), status:'andamento'}, onSave: async v => { const x = {id:uid(), clienteId:el.dataset.id, ...v}; S.consertos.push(x); await dbPut('consertos', x); }}),
+  'open-conserto': el => go({v:'conserto', id:el.dataset.id}),
+  'open-item': el => go({v:'item', id:el.dataset.id}),
+  'cst-f': el => { ui.cst = el.dataset.f; render(); },
+  'novo-conserto-geral': () => { if (!S.clientes.length){ toast('Cadastre um cliente primeiro.'); return; }
+    openForm({title:'Novo conserto', fields:conFields(true), values:{data:today(), status:'andamento'}, onSave: async v => { const x = {id:uid(), ...v}; S.consertos.push(x); await dbPut('consertos', x); }}); },
+  'set-status': async el => { const x = S.consertos.find(k => k.id === route.id); if (!x) return; x.status = el.dataset.s; await dbPut('consertos', x); render(); },
+  'ed-conserto': el => { const x = S.consertos.find(k => k.id === el.dataset.id); openForm({title:'Editar conserto', fields:conFields(), values:x,
+    onSave: async v => { Object.assign(x, v); await dbPut('consertos', x); },
+    onDelete: async () => { await delFotosOf(x.id); S.consertos = S.consertos.filter(k => k.id !== x.id); await dbDel('consertos', x.id); if (route.v === 'conserto') route = stack.pop() || {v:'consertos'}; }}); },
+
+  'est-f': el => { ui.est = el.dataset.f; render(); },
+  'novo-est': () => openForm({title:'Novo item no estoque', fields:estFields(), values:{tipo:'peca', qtd:1, min:0},
+    onSave: async v => { const numero = S.estoque.reduce((m, i) => Math.max(m, i.numero), 0) + 1; if (v.tipo === 'aparelho') v.qtd = 1; v.link = fixUrl(v.link); const i = {id:uid(), numero, ...v}; S.estoque.push(i); await dbPut('estoque', i); toast('Item #' + pad(numero) + ' criado.'); }}),
+  'ed-est': el => { const i = S.estoque.find(x => x.id === el.dataset.id); openForm({title:'Item #' + pad(i.numero), fields:estFields(), values:i,
+    onSave: async v => { if (v.tipo === 'aparelho') v.qtd = 1; v.link = fixUrl(v.link); Object.assign(i, v); await dbPut('estoque', i); },
+    onDelete: async () => { await delFotosOf(i.id); S.estoque = S.estoque.filter(x => x.id !== i.id); await dbDel('estoque', i.id); if (route.v === 'item') route = stack.pop() || {v:'estoque'}; }}); },
+  qtd: async el => { const i = S.estoque.find(x => x.id === el.dataset.id); i.qtd = Math.max(0, i.qtd + Number(el.dataset.d)); await dbPut('estoque', i); render(); },
+
+  'cat-f': el => { ui.cat = el.dataset.f; render(); },
+  'open-equip': el => go({v:'equip', id:el.dataset.id, sub:'esquema'}),
+  'novo-equip': () => openForm({title:'Novo equipamento', fields:eqFields(), values:{categoria: ui.cat !== 'todas' ? ui.cat : ''},
+    onSave: async v => { const e = {id:uid(), ...v, comentarios:'', semelhantes:[], pecas:[]}; S.equip.push(e); await dbPut('equip', e); route = {v:'equips'}; go({v:'equip', id:e.id, sub:'esquema'}); }}),
+  'ed-equip': el => { const e = S.equip.find(x => x.id === el.dataset.id); openForm({title:'Editar equipamento', fields:eqFields(), values:e,
+    onSave: async v => { Object.assign(e, v); await dbPut('equip', e); },
+    onDelete: async () => { for (const f of await dbAll('arquivos')) if (f.equipId === e.id) await dbDel('arquivos', f.id); delete filesCache[e.id];
+      S.equip = S.equip.filter(x => x.id !== e.id); await dbDel('equip', e.id); stack = []; route = {v:'equips'}; }}); },
+  sub: el => { route.sub = el.dataset.s; render(); },
+  'nova-peca': () => { const e = S.equip.find(x => x.id === route.id); openForm({title:'Nova peça', fields:[{k:'nome', l:'Peça', req:true, ph:'Ex.: Fonte, placa T-Con, painel...'}, {k:'valor', l:'Valor (R$)', t:'money', ph:'0,00'}],
+    onSave: async v => { e.pecas.push({id:uid(), nome:v.nome, valor:v.valor, data:today()}); await dbPut('equip', e); }}); },
+  'ed-peca': el => { const e = S.equip.find(x => x.id === route.id), p = e.pecas.find(x => x.id === el.dataset.id);
+    openForm({title:'Editar peça', fields:[{k:'nome', l:'Peça', req:true}, {k:'valor', l:'Valor (R$)', t:'money'}], values:p,
+    onSave: async v => { if (v.valor !== p.valor) p.data = today(); p.nome = v.nome; p.valor = v.valor; await dbPut('equip', e); },
+    onDelete: async () => { e.pecas = e.pecas.filter(x => x.id !== p.id); await dbPut('equip', e); }}); },
+  'nova-sem': () => { const e = S.equip.find(x => x.id === route.id); openForm({title:'Novo semelhante', fields:[{k:'nome', l:'Modelo ou peça semelhante', req:true}, {k:'obs', l:'Diferenças / se pode substituir', t:'area'}],
+    onSave: async v => { e.semelhantes.push({id:uid(), ...v}); await dbPut('equip', e); }}); },
+  'ed-sem': el => { const e = S.equip.find(x => x.id === route.id), s = e.semelhantes.find(x => x.id === el.dataset.id);
+    openForm({title:'Editar semelhante', fields:[{k:'nome', l:'Modelo ou peça semelhante', req:true}, {k:'obs', l:'Diferenças / se pode substituir', t:'area'}], values:s,
+    onSave: async v => { Object.assign(s, v); await dbPut('equip', e); },
+    onDelete: async () => { e.semelhantes = e.semelhantes.filter(x => x.id !== s.id); await dbPut('equip', e); }}); },
+  'open-file': el => { const f = (filesCache[route.id] || []).find(x => x.id === el.dataset.id); if (f) openViewer(f); },
+  'del-file': el => confirmDlg('Excluir este esquema?', async () => { const f = (filesCache[route.id] || []).find(x => x.id === el.dataset.id); if (f) await deleteFile(f); render(); }),
+  vdel: () => { const f = vw.file; if (f) confirmDlg('Excluir esta foto?', async () => { await deleteFile(f); closeViewer(); render(); }); },
+  vz: el => { vw.zoom = Math.min(5, Math.max(0.5, vw.zoom + Number(el.dataset.d))); paintViewer(); },
+  export: doExport
+};
+document.addEventListener('click', e => {
+  const el = e.target.closest('[data-act]'); if (!el) return;
+  const fn = act[el.dataset.act]; if (fn) fn(el);
+});
+document.addEventListener('input', e => {
+  if (e.target.id !== 'q') return;
+  ui.q = e.target.value;
+  const fn = {clientes:listClientes, consertos:listConsertos, estoque:listEstoque, equips:listEquips}[route.v];
+  if (fn) $('#list').innerHTML = fn();
+});
+
+/* ---------- Sincronização com o Google Drive ---------- */
+/* Tudo é salvo primeiro no celular (IndexedDB). Quando há internet, o app junta as
+   mudanças deste aparelho com as do Drive (vale a edição mais recente de cada item). */
+const SY = {st:'off', last:0, busy:false, again:false, timer:null, pt:null, dev:null};
+const SYS = ['clientes','consertos','estoque','equip','arquivos'];
+const DRV = 'https://www.googleapis.com/drive/v3/files', UPL = 'https://www.googleapis.com/upload/drive/v3/files';
+const syGet = () => { try { return JSON.parse(localStorage.getItem('sync_auth') || 'null'); } catch(e){ return null; } };
+const sySet = a => { try { if (a) localStorage.setItem('sync_auth', JSON.stringify(a)); else localStorage.removeItem('sync_auth'); } catch(e){} };
+
+async function oauthPost(url, obj){
+  const C = window.Capacitor, H = C && C.Plugins && C.Plugins.CapacitorHttp;
+  const opt = {url, headers:{'Content-Type':'application/x-www-form-urlencoded'}, data:obj};
+  let nat = null;
+  if (C && typeof C.nativePromise === 'function'){ try { nat = await C.nativePromise('CapacitorHttp', 'post', opt); } catch(e){ nat = {fail:String(e && e.message || e)}; } }
+  else if (H && H.post){ try { nat = await H.post(opt); } catch(e){ nat = {fail:String(e && e.message || e)}; } }
+  if (nat && !nat.fail){
+    let d = nat.data; if (typeof d === 'string'){ try { d = JSON.parse(d); } catch(e){ d = {error:'resposta_invalida', error_description:d.slice(0, 120)}; } }
+    return {data:d || {}, status:nat.status};
+  }
+  try {
+    const r = await fetch(url, {method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:Object.keys(obj).map(k => encodeURIComponent(k) + '=' + encodeURIComponent(obj[k])).join('&')});
+    let d = {}; try { d = await r.json(); } catch(e){}
+    return {data:d, status:r.status};
+  } catch(e){ const x = new Error('rede'); x.detail = 'sem acesso ao Google (' + ((nat && nat.fail) || String(e && e.message || e)) + ')'; throw x; }
+}
+async function syToken(){
+  const a = syGet(); if (!a || !a.refresh) throw new Error('auth');
+  if (a.access && a.exp > Date.now() + 60000) return a.access;
+  const r = await oauthPost('https://oauth2.googleapis.com/token', {client_id:a.cid, client_secret:a.sec, refresh_token:a.refresh, grant_type:'refresh_token'});
+  if (!r.data.access_token) throw new Error(r.data.error === 'invalid_grant' ? 'auth' : 'token');
+  a.access = r.data.access_token; a.exp = Date.now() + r.data.expires_in * 1000; sySet(a); return a.access;
+}
+
+/* conectar (login do Google por código, sem precisar de plugin nativo) */
+async function syConnect(){
+  const cid = ($('#syCid') && $('#syCid').value || '').trim(), sec = ($('#sySec') && $('#sySec').value || '').trim();
+  if (!cid || !sec){ toast('Preencha os dois campos.'); return; }
+  SY.msg = '';
+  try {
+    const r = await oauthPost('https://oauth2.googleapis.com/device/code', {client_id:cid, scope:'https://www.googleapis.com/auth/drive.appdata'});
+    if (!r.data.device_code){
+      const er = r.data.error || '', ds = r.data.error_description || '';
+      SY.msg = 'O Google respondeu: ' + (er || ('erro ' + r.status)) + (ds ? ' - ' + ds : '') + '. Mande esta frase para quem está te ajudando.';
+      SY.st = 'off'; syPaint(); toast('Não consegui iniciar. Veja o motivo na tela.'); return;
+    }
+    SY.dev = {cid, sec, ...r.data, until:Date.now() + r.data.expires_in * 1000, wait:(r.data.interval || 5) * 1000};
+    SY.st = 'pair'; syPaint(); syPoll();
+  } catch(e){
+    SY.msg = (e && e.detail) || ('Erro: ' + String(e && e.message || e));
+    SY.st = 'off'; syPaint(); toast('Não consegui iniciar. Veja o motivo na tela.');
+  }
+}
+async function syPoll(){
+  const d = SY.dev; if (!d) return; clearTimeout(SY.pt);
+  if (Date.now() > d.until){ SY.dev = null; SY.st = 'off'; syPaint(); toast('O código expirou. Tente de novo.'); return; }
+  try {
+    const r = await oauthPost('https://oauth2.googleapis.com/token', {client_id:d.cid, client_secret:d.sec, device_code:d.device_code, grant_type:'urn:ietf:params:oauth:grant-type:device_code'});
+    if (r.data.refresh_token){
+      sySet({cid:d.cid, sec:d.sec, refresh:r.data.refresh_token, access:r.data.access_token, exp:Date.now() + r.data.expires_in * 1000});
+      SY.dev = null; SY.st = 'idle'; toast('Conectado ao Drive!'); syPaint(); syRun(); return;
+    }
+    const er = r.data.error;
+    if (er === 'slow_down') d.wait += 5000;
+    else if (er && er !== 'authorization_pending'){ SY.dev = null; SY.st = 'off'; SY.msg = 'O Google respondeu: ' + er + (r.data.error_description ? ' - ' + r.data.error_description : ''); syPaint(); toast(er === 'access_denied' ? 'A autorização foi negada.' : 'Não deu certo. Tente de novo.'); return; }
+  } catch(e){}
+  SY.pt = setTimeout(syPoll, d.wait);
+}
+
+/* Google Drive (pasta escondida do app) */
+async function drv(url, opt = {}){
+  const tk = await syToken();
+  const F = window.CapacitorWebFetch || window.fetch.bind(window);
+  const r = await F(url, {...opt, headers:{Authorization:'Bearer ' + tk, ...(opt.headers || {})}});
+  if (!r.ok) throw new Error('drive ' + r.status);
+  return r;
+}
+async function drvList(){
+  const m = {}; let pt = '';
+  do {
+    const r = await (await drv(`${DRV}?spaces=appDataFolder&pageSize=1000&fields=nextPageToken,files(id,name)${pt ? '&pageToken=' + encodeURIComponent(pt) : ''}`)).json();
+    (r.files || []).forEach(f => { m[f.name] = f.id; }); pt = r.nextPageToken || '';
+  } while (pt);
+  return m;
+}
+async function drvPut(name, blob, type, id){
+  if (id) return drv(`${UPL}/${id}?uploadType=media`, {method:'PATCH', headers:{'Content-Type':type}, body:blob});
+  const bd = 'osmar' + uid();
+  const body = new Blob([`--${bd}\r\nContent-Type: application/json\r\n\r\n`, JSON.stringify({name, parents:['appDataFolder']}), `\r\n--${bd}\r\nContent-Type: ${type}\r\n\r\n`, blob, `\r\n--${bd}--`]);
+  return drv(`${UPL}?uploadType=multipart`, {method:'POST', headers:{'Content-Type':'multipart/related; boundary=' + bd}, body});
+}
+
+/* junta o que está no celular com o que está no Drive */
+async function syncNow(){
+  const ids = await drvList();
+  let remote = {};
+  if (ids['dados.json']) remote = await (await drv(`${DRV}/${ids['dados.json']}?alt=media`)).json();
+  const rrec = remote.rec || {}, rtomb = remote.tomb || {};
+  const tl = {}; for (const t of await dbAll(TOMB)) tl[t.id] = t._u || 0;
+  const tomb = {...rtomb}; for (const k in tl) tomb[k] = Math.max(tomb[k] || 0, tl[k]);
+  let changed = false; for (const k in tomb) if (!(rtomb[k] >= tomb[k])) changed = true;
+  const local = {}; for (const s of SYS){ local[s] = {}; for (const o of await dbAll(s)) local[s][o.id] = o; }
+  const out = {v:1, rec:{}, tomb}, del = [], down = [];
+  for (const s of SYS){
+    out.rec[s] = {}; const R = rrec[s] || {}, L = local[s];
+    for (const id of new Set([...Object.keys(R), ...Object.keys(L)])){
+      const l = L[id], r = R[id], lu = l ? (l._u || 0) : -1, ru = r ? (r._u || 0) : -1;
+      const best = lu >= ru ? l : r, bu = Math.max(lu, ru), t = tomb[s + ':' + id] || 0;
+      if (t && t >= bu){ if (l) del.push([s, id]); continue; }
+      if (s === 'arquivos'){ const {blob, ...m} = best; out.rec[s][id] = m; } else out.rec[s][id] = best;
+      if (lu > ru) changed = true; else if (ru > lu) down.push([s, r]);
+    }
+  }
+  /* aplica no celular o que veio do Drive */
+  for (const [s, id] of del) await tx(s, 'readwrite', x => x.delete(id));
+  for (const [s, r] of down){
+    if (s === 'arquivos'){
+      if (!ids['a_' + r.id]) continue;
+      const b = await (await drv(`${DRV}/${ids['a_' + r.id]}?alt=media`)).blob();
+      await tx(s, 'readwrite', x => x.put({...r, blob:new Blob([b], {type:r.tipo || b.type})}));
+    } else await tx(s, 'readwrite', x => x.put(r));
+  }
+  for (const k in tomb) if (!(tl[k] >= tomb[k])) await tx(TOMB, 'readwrite', x => x.put({id:k, _u:tomb[k]}));
+  /* manda para o Drive o que é novo aqui (arquivos primeiro, depois a lista) */
+  for (const id in out.rec.arquivos){
+    const f = local.arquivos[id];
+    if (!ids['a_' + id] && f && f.blob) await drvPut('a_' + id, f.blob, f.tipo || 'application/octet-stream');
+  }
+  for (const name in ids) if (name.startsWith('a_') && tomb['arquivos:' + name.slice(2)]) await drv(`${DRV}/${ids[name]}`, {method:'DELETE'});
+  if (changed) await drvPut('dados.json', new Blob([JSON.stringify(out)], {type:'application/json'}), 'application/json', ids['dados.json']);
+  /* atualiza a tela */
+  if (del.length || down.length){
+    const [c, k, s, q] = await Promise.all(['clientes','consertos','estoque','equip'].map(dbAll));
+    S.clientes = c || []; S.consertos = k || []; S.estoque = s || []; S.equip = (q || []).map(e => ({semelhantes:[], pecas:[], comentarios:'', ...e}));
+    Object.keys(filesCache).forEach(k => delete filesCache[k]);
+    const kind = {cliente:'clientes', conserto:'consertos', item:'estoque', equip:'equip'}[route.v];
+    if (kind && !S[kind].some(x => x.id === route.id)){ stack = []; route = {v:{cliente:'clientes', conserto:'consertos', item:'estoque', equip:'equips'}[route.v]}; }
+    const ae = document.activeElement && document.activeElement.tagName;
+    if (!$('#layer').innerHTML && $('#viewer').classList.contains('hidden') && ae !== 'TEXTAREA' && ae !== 'INPUT') render();
+  }
+}
+async function syRun(){
+  if (!syGet() || memOnly || SY.dev) return;
+  if (!navigator.onLine){ SY.st = 'offline'; syPaint(); return; }
+  if (SY.busy){ SY.again = true; return; }
+  SY.busy = true; SY.st = 'busy'; syPaint();
+  try { await syncNow(); SY.st = 'ok'; SY.last = Date.now(); try { localStorage.setItem('sync_last', SY.last); } catch(e){} }
+  catch(e){ SY.st = e && e.message === 'auth' ? 'authfail' : (navigator.onLine ? 'err' : 'offline'); }
+  SY.busy = false; syPaint();
+  if (SY.again){ SY.again = false; syQueue(1500); }
+}
+function syQueue(ms = 4000){ if (!syGet()) return; clearTimeout(SY.timer); SY.timer = setTimeout(syRun, ms); }
+
+/* tela */
+function syStatusText(){
+  const h = SY.last ? new Date(SY.last).toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'}) : '';
+  return ({
+    busy:'Sincronizando…',
+    idle: h ? 'Última sincronização às ' + h + '.' : 'Conectado. Aguardando a primeira sincronização.',
+    ok:'Tudo sincronizado' + (h ? ' às ' + h : '') + '.',
+    offline:'Sem internet. Tudo está sendo salvo no celular e será enviado quando a rede voltar.',
+    err:'Não consegui sincronizar agora. O app tenta de novo sozinho.',
+    authfail:'A conexão com o Google expirou. Toque em Desconectar e conecte de novo.'
+  })[SY.st] || '';
+}
+function syBoxHTML(){
+  const d = SY.dev;
+  if (d) return `<h2>Conectar ao Google Drive</h2><p class="sub">1) Toque no botão e entre com sua conta Google.<br>2) Quando pedir um código, digite este:</p>
+    <p class="num" style="font-size:30px;font-weight:800;letter-spacing:.12em;text-align:center;margin:12px 0">${esc(d.user_code)}</p>
+    <div class="actions"><a class="btn" href="${esc(d.verification_url)}" target="_blank" rel="noopener" style="text-decoration:none;display:inline-flex;align-items:center">Abrir página do Google</a><button class="btn ghost" data-act="sync-off">Cancelar</button></div>
+    <p class="sub">Depois de autorizar, volte para o app. Ele conecta sozinho.</p>`;
+  if (!syGet()) return `${SY.msg ? '<div class="warnbox">' + esc(SY.msg) + '</div>' : ''}<h2>Sincronizar pelo Google Drive</h2><p class="sub">Salva tudo automaticamente no Drive e passa as mudanças para os outros aparelhos (use a mesma conta Google em todos). Sem internet, continua salvando no celular. Para pegar o ID e a chave abaixo, siga o arquivo GUIA-DRIVE.txt.</p>
+    <label class="fld"><span>ID do cliente</span><input id="syCid" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
+    <label class="fld"><span>Chave secreta do cliente</span><input id="sySec" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
+    <div class="actions"><button class="btn" data-act="sync-connect">Conectar ao Drive</button></div>`;
+  return `<h2>Google Drive</h2><p class="sub" id="syst">${syStatusText()}</p>
+    <p class="sub">Tudo que você cadastra é salvo no celular na hora e enviado ao Drive quando há internet. Os outros aparelhos com a mesma conta recebem as mudanças.</p>
+    <div class="actions"><button class="btn" data-act="sync-now">Sincronizar agora</button><button class="btn danger" data-act="sync-off">Desconectar</button></div>`;
+}
+function syPaint(){
+  const b = $('#syncbox'); if (!b) return;
+  if (document.activeElement && b.contains(document.activeElement) && document.activeElement.tagName === 'INPUT') return;
+  const c = $('#syCid'), k = $('#sySec'), cv = c ? c.value : '', kv = k ? k.value : '';
+  b.innerHTML = syBoxHTML();
+  if (!syGet() && !SY.dev){ if ($('#syCid')) $('#syCid').value = cv; if ($('#sySec')) $('#sySec').value = kv; }
+}
+Object.assign(act, {
+  'sync-connect': syConnect,
+  'sync-now': () => { if (!navigator.onLine) toast('Sem internet agora.'); clearTimeout(SY.timer); syRun(); },
+  'sync-off': () => {
+    if (SY.dev){ SY.dev = null; clearTimeout(SY.pt); SY.st = 'off'; syPaint(); return; }
+    confirmDlg('Desconectar do Google Drive? Os dados continuam no celular e no Drive.', () => { sySet(null); SY.st = 'off'; syPaint(); }, 'Desconectar');
+  }
+});
+function syStart(){
+  try { SY.last = Number(localStorage.getItem('sync_last') || 0); } catch(e){}
+  SY.st = syGet() ? 'idle' : 'off';
+  addEventListener('online', () => syRun());
+  addEventListener('offline', () => { if (syGet()){ SY.st = 'offline'; syPaint(); } });
+  document.addEventListener('visibilitychange', () => { if (!document.hidden){ if (SY.dev) syPoll(); else syRun(); } });
+  setInterval(() => { if (!document.hidden) syRun(); }, 120000);
+  syRun();
+}
+
+/* ---------- início ---------- */
+(async function init(){
+  try { idb = await openDB(); } catch(e){ idb = null; memOnly = true; }
+  try {
+    const [c, k, s, q] = await Promise.all(['clientes','consertos','estoque','equip'].map(dbAll));
+    S.clientes = c || []; S.consertos = k || []; S.estoque = s || []; S.equip = (q || []).map(e => ({semelhantes:[], pecas:[], comentarios:'', ...e}));
+  } catch(e){ toast('Não consegui ler os dados salvos.'); }
+  const A = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App;
+  if (A && A.addListener) A.addListener('backButton', () => {
+    if (!$('#viewer').classList.contains('hidden')) closeViewer();
+    else if ($('#layer').innerHTML) closeLayer();
+    else if (stack.length) back();
+    else A.exitApp();
+  });
+  S.consertos.forEach(x => { if (x.status === 'entregue'){ x.status = 'retirado'; dbPut('consertos', x); } });
+  if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+  render();
+  syStart();
+  if (memOnly) toast('Dados não serão salvos neste navegador.');
+})();
+</script>
+</body>
+</html>
