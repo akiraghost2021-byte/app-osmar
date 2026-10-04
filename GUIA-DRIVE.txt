@@ -1,0 +1,33 @@
+GUIA: LIGAR A SINCRONIZACAO COM O GOOGLE DRIVE
+(so precisa fazer UMA vez. Use sempre a MESMA conta Google em todos os aparelhos.)
+
+PARTE 1 - Criar a "chave" no Google (no computador e mais facil)
+1. Abra https://console.cloud.google.com e entre com a conta Google.
+2. No topo, clique em "Selecionar projeto" > "Novo projeto". Nome: Eletronica Osmar. Criar.
+3. Menu (tres tracinhos) > "APIs e servicos" > "Biblioteca". Procure "Google Drive API" e clique em "Ativar".
+4. Menu > "APIs e servicos" > "Tela de permissao OAuth" (ou "Google Auth Platform").
+   - Comece/Configurar. Nome do app: Eletronica Osmar. E-mail: o seu.
+   - Publico: "Externo".
+   - Em "Acesso a dados" / "Escopos": adicione  .../auth/drive.appdata
+   - IMPORTANTE: depois clique em "Publicar app" (status "Em producao").
+     Se ficar em "Teste", a conexao some a cada 7 dias.
+5. Menu > "Clientes" (ou "Credenciais") > "Criar cliente" (ou "Criar credenciais" > "ID do cliente OAuth").
+   - Tipo de aplicativo: "TVs e dispositivos de entrada limitada".
+   - Nome: App Osmar. Criar.
+6. Vai aparecer o "ID do cliente" e a "Chave secreta do cliente". Copie os dois
+   (mande para voce mesma pelo WhatsApp para colar no celular).
+
+PARTE 2 - Conectar o app (em cada aparelho)
+1. Instale o APK novo (gerado pelo GitHub).
+2. Abra a aba Backup. Cole o ID do cliente e a chave secreta. Toque em "Conectar ao Drive".
+3. Aparece um codigo. Toque em "Abrir pagina do Google", entre na conta, digite o codigo e autorize.
+   Se aparecer aviso de "app nao verificado", toque em Avancado > Continuar.
+4. Volte ao app: ele conecta sozinho e comeca a sincronizar.
+
+COMO FUNCIONA
+- Tudo que cadastra e salvo no celular na hora, mesmo sem internet.
+- Com internet, o app envia ao Drive e recebe as mudancas dos outros aparelhos
+  (ao abrir, a cada poucos segundos depois de mexer, a cada 2 minutos e quando a rede volta).
+- Se o mesmo item for editado em dois aparelhos, vale a edicao mais recente.
+- Os dados ficam numa area escondida do app dentro do Drive (nao aparece nos seus arquivos).
+- A "Cópia manual em arquivo" continua existindo como segurança extra.
