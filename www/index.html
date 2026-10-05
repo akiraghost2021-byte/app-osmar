@@ -39,6 +39,8 @@ button{cursor:pointer}
 header.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:10;background:var(--accent);color:var(--accent-ink);display:flex;align-items:center;gap:8px;padding:10px 14px;min-height:56px}
 :root[data-theme="dark"] header.top{background:var(--card);color:var(--ink);border-bottom:2px solid var(--accent)}
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]) header.top{background:var(--card);color:var(--ink);border-bottom:2px solid var(--accent)}}
+.logo{width:34px;height:34px;flex:none;display:block}
+#back:not(.hidden) + .logo{display:none}
 .brand{font-size:12px;opacity:.85;font-weight:500;line-height:1.1}
 header.top h1{font-size:19px;font-weight:600;margin:0;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .iconbtn{background:transparent;border:0;color:inherit;width:40px;height:40px;border-radius:10px;display:grid;place-items:center;margin-left:-8px}
@@ -120,6 +122,21 @@ textarea.notes{width:100%;min-height:55vh;padding:12px;border:1.5px solid var(--
 .plain:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 .qty span.n{background:var(--stc);color:var(--on-c);border-radius:10px;padding:6px 0;min-width:46px}
 .buy{display:inline-block;margin-top:8px;padding:7px 16px;border-radius:999px;background:var(--stc);color:var(--on-c);font-weight:700;font-size:14px;text-decoration:none}
+.pickbtn{width:100%;text-align:left;padding:11px 12px;border:1.5px solid var(--line);border-radius:10px;background:var(--bg);display:flex;justify-content:space-between;align-items:center;min-height:46px}
+.pickbtn::after{content:"▾";color:var(--muted);margin-left:8px}
+.pickbtn .ph{color:var(--muted)}
+.pickpanel{border:1.5px solid var(--line);border-radius:10px;background:var(--card);margin:-6px 0 12px;padding:6px;max-height:280px;overflow-y:auto}
+.pkrow{display:flex;align-items:center;gap:2px}
+.pkname{flex:1;min-width:0;text-align:left;background:none;border:0;padding:12px 10px;border-radius:8px;font-weight:500;overflow:hidden;text-overflow:ellipsis}
+.pkname:active,.pk0:active,.pklink:active{background:var(--accent-soft)}
+.pkic{flex:none;min-width:40px;height:40px;background:none;border:0;border-radius:8px;color:var(--muted);font-size:17px;padding:0 4px}
+.pkic.arm{color:var(--danger);font-size:13px;font-weight:600;padding:0 8px}
+.pk0,.pklink{display:block;width:100%;text-align:left;background:none;border:0;padding:11px 10px;border-radius:8px;color:var(--muted);font-size:14px}
+.pklink{color:var(--accent);font-weight:600}
+.pkhead{padding:4px 10px 2px;color:var(--muted);font-size:13px}
+.pkempty{padding:8px 10px;color:var(--muted);font-size:14px}
+.pkadd{display:flex;gap:8px;margin-top:6px;padding-top:8px;border-top:1px solid var(--line)}
+.pkadd input,.pkrow input{flex:1;min-width:0;padding:10px 12px;border:1.5px solid var(--line);border-radius:10px;background:var(--bg)}
 .sdots{display:flex;gap:14px;margin:4px 0 6px}
 .sdots button{width:46px;height:46px;border-radius:50%;border:3px solid var(--stc);background:transparent;padding:0}
 .sdots button[aria-pressed="true"]{background:var(--stc);box-shadow:0 0 0 3px var(--card),0 0 0 5px var(--stc)}
@@ -139,7 +156,7 @@ textarea.notes{width:100%;min-height:55vh;padding:12px;border:1.5px solid var(--
 <script src="pdf.min.js"></script>
 </head>
 <body>
-<header class="top"><button class="iconbtn hidden" id="back" data-act="back" aria-label="Voltar"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button><div style="flex:1;min-width:0"><div class="brand">Eletrônica Osmar</div><h1 id="title">Clientes</h1></div></header>
+<header class="top"><button class="iconbtn hidden" id="back" data-act="back" aria-label="Voltar"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button><img class="logo" src="logo.png" alt="" width="34" height="34"><div style="flex:1;min-width:0"><div class="brand">Eletrônica Osmar</div><h1 id="title">Clientes</h1></div></header>
 <main id="app"></main>
 <nav class="tabs" id="tabs" aria-label="Seções">
   <button data-act="tab" data-v="clientes"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg>Clientes</button>
@@ -171,12 +188,12 @@ let toastTimer;
 function toast(msg){ const t = $('#toast'); t.textContent = msg; t.classList.remove('hidden'); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.add('hidden'), 2600); }
 
 /* ---------- banco de dados no aparelho (IndexedDB) ---------- */
-const STORES = ['clientes','consertos','estoque','equip','arquivos'], TOMB = 'lixeira';
+const STORES = ['clientes','consertos','estoque','equip','arquivos','opcoes'], TOMB = 'lixeira';
 let idb = null, memOnly = false;
 function openDB(){
   return new Promise((res, rej) => {
     if (!window.indexedDB) return rej(new Error('sem indexedDB'));
-    const r = indexedDB.open('bancada-oficina', 2);
+    const r = indexedDB.open('bancada-oficina', 3);
     r.onupgradeneeded = () => { STORES.concat(TOMB).forEach(n => { if (!r.result.objectStoreNames.contains(n)) r.result.createObjectStore(n, {keyPath:'id'}); }); };
     r.onsuccess = () => res(r.result);
     r.onerror = () => rej(r.error);
@@ -199,7 +216,7 @@ const dbDel = async (n, id) => { try { await tx(n, 'readwrite', s => s.delete(id
 const dbClear = n => tx(n, 'readwrite', s => s.clear());
 
 /* ---------- estado ---------- */
-const S = {clientes:[], consertos:[], estoque:[], equip:[]};
+const S = {clientes:[], consertos:[], estoque:[], equip:[], opcoes:[]};
 let route = {v:'clientes'}, stack = [];
 const ui = {q:'', est:'todos', cat:'todas', cst:'todos'};
 const filesCache = {};
@@ -216,6 +233,7 @@ function fieldHtml(f, v){
   let inp;
   if (f.t === 'area') inp = `<textarea id="${id}" rows="3" placeholder="${ph}">${esc(v ?? '')}</textarea>`;
   else if (f.t === 'select') inp = `<select id="${id}">${f.opts.map(([k,l]) => `<option value="${esc(k)}"${k === (v ?? '') ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select>`;
+  else if (f.t === 'pick') inp = `<button type="button" class="pickbtn" id="${id}" value="${esc(v ?? '')}">${v ? esc(v) : '<span class="ph">Toque para escolher</span>'}</button>`;
   else if (f.t === 'combo') inp = `<input id="${id}" list="${id}_l" value="${esc(v ?? '')}" placeholder="${ph}" autocomplete="off"><datalist id="${id}_l">${f.list.map(x => `<option value="${esc(x)}">`).join('')}</datalist>`;
   else {
     const type = {num:'number', date:'date', tel:'tel', url:'url'}[f.t] || 'text';
@@ -223,7 +241,59 @@ function fieldHtml(f, v){
     const val = f.t === 'money' ? moneyIn(v) : (v ?? '');
     inp = `<input id="${id}" type="${type}"${extra} value="${esc(val)}" placeholder="${ph}">`;
   }
-  return `<label class="fld" data-wrap="${f.k}"${f.showIf && !f.showIf(f.cur || {}) ? ' style="display:none"' : ''}><span>${esc(f.l)}</span>${inp}</label>`;
+  return `<label class="fld" data-wrap="${f.k}"${f.showIf && !f.showIf(f.cur || {}) ? ' style="display:none"' : ''}><span>${esc(f.l)}</span>${inp}</label>${f.t === 'pick' ? `<div class="pickpanel hidden" id="pp_${f.k}"></div>` : ''}`;
+}
+const pkNorm = x => String(x || '').trim().toLowerCase();
+function initPick(f){
+  const btn = $('#f_' + f.k), panel = $('#pp_' + f.k); if (!btn || !panel) return;
+  let showAll = false, editing = null, armed = null, timer = null;
+  const eqNow = () => f.dep && $('#f_' + f.dep) ? $('#f_' + f.dep).value.trim() : '';
+  const setBtn = v => { btn.value = v; btn.innerHTML = v ? esc(v) : '<span class="ph">Toque para escolher</span>'; btn.dispatchEvent(new Event('input', {bubbles:true})); };
+  const close = () => { panel.classList.add('hidden'); editing = null; armed = null; };
+  function paint(){
+    const eq = eqNow(), all = S.opcoes.filter(o => o.tipo === f.tipo);
+    let list = all;
+    if (f.dep && eq && !showAll) list = all.filter(o => !o.equip || pkNorm(o.equip) === pkNorm(eq));
+    const hidden = all.length - list.length;
+    list = list.slice().sort((a, b) => String(a.nome || '').localeCompare(String(b.nome || ''), 'pt-BR'));
+    const row = o => editing === o.id
+      ? `<div class="pkrow"><input id="pke_${o.id}" value="${esc(o.nome)}" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false"><button type="button" class="pkic" data-pk="save" data-id="${o.id}" aria-label="Salvar">✓</button><button type="button" class="pkic" data-pk="cancel" aria-label="Cancelar">✕</button></div>`
+      : `<div class="pkrow"><button type="button" class="pkname" data-pk="sel" data-id="${o.id}">${esc(o.nome)}</button><button type="button" class="pkic" data-pk="edit" data-id="${o.id}" aria-label="Renomear">✎</button><button type="button" class="pkic${armed === o.id ? ' arm' : ''}" data-pk="del" data-id="${o.id}" aria-label="Remover">${armed === o.id ? 'Remover?' : '🗑'}</button></div>`;
+    panel.innerHTML = (f.dep && eq && !showAll ? `<div class="pkhead">Salvos para ${esc(eq)}</div>` : '')
+      + '<button type="button" class="pk0" data-pk="clear">— nenhum —</button>'
+      + (list.length ? list.map(row).join('') : '<div class="pkempty">Nada salvo ainda. Escreva abaixo e toque em Adicionar.</div>')
+      + (hidden > 0 ? `<button type="button" class="pklink" data-pk="all">Ver mais ${hidden} de outros equipamentos</button>` : '')
+      + `<div class="pkadd"><input id="pkn_${f.k}" placeholder="Novo: ${esc(f.l.toLowerCase())}" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false"><button type="button" class="btn small" data-pk="add">Adicionar</button></div>`;
+  }
+  btn.onclick = e => {
+    e.preventDefault();
+    const was = panel.classList.contains('hidden');
+    document.querySelectorAll('.pickpanel').forEach(x => x.classList.add('hidden'));
+    if (was){ showAll = false; editing = null; armed = null; paint(); panel.classList.remove('hidden'); panel.scrollIntoView({block:'nearest'}); }
+  };
+  const add = async () => {
+    const inp = $('#pkn_' + f.k), name = (inp.value || '').trim(); if (!name) return;
+    const eq = eqNow();
+    let o = S.opcoes.find(x => x.tipo === f.tipo && pkNorm(x.nome) === pkNorm(name) && (!f.dep || pkNorm(x.equip) === pkNorm(eq)));
+    if (!o){ o = {id:uid(), tipo:f.tipo, nome:name}; if (f.dep) o.equip = eq; S.opcoes.push(o); await dbPut('opcoes', o); }
+    setBtn(o.nome); close();
+  };
+  panel.addEventListener('keydown', e => { if (e.key === 'Enter'){ e.preventDefault(); if (e.target.id === 'pkn_' + f.k) add(); else if (e.target.id && e.target.id.startsWith('pke_')) panel.querySelector('[data-pk="save"]').click(); } });
+  panel.addEventListener('click', async e => {
+    const b = e.target.closest('[data-pk]'); if (!b) return;
+    const act1 = b.dataset.pk, id = b.dataset.id, o = id && S.opcoes.find(x => x.id === id);
+    if (act1 === 'sel' && o){ setBtn(o.nome); close(); }
+    else if (act1 === 'clear'){ setBtn(''); close(); }
+    else if (act1 === 'add') add();
+    else if (act1 === 'all'){ showAll = true; paint(); }
+    else if (act1 === 'edit'){ editing = id; armed = null; paint(); const i = $('#pke_' + id); if (i) i.focus(); }
+    else if (act1 === 'cancel'){ editing = null; paint(); }
+    else if (act1 === 'save' && o){ const n = ($('#pke_' + id).value || '').trim(); if (n){ o.nome = n; await dbPut('opcoes', o); } editing = null; paint(); }
+    else if (act1 === 'del' && o){
+      if (armed !== id){ armed = id; clearTimeout(timer); timer = setTimeout(() => { armed = null; if (!panel.classList.contains('hidden')) paint(); }, 3000); paint(); }
+      else { armed = null; S.opcoes = S.opcoes.filter(x => x.id !== id); await dbDel('opcoes', id); paint(); }
+    }
+  });
 }
 function openForm({title, fields, values = {}, onSave, onDelete, saveLabel = 'Salvar'}){
   $('#layer').innerHTML = `<div class="scrim" data-act="close"></div>
@@ -231,6 +301,7 @@ function openForm({title, fields, values = {}, onSave, onDelete, saveLabel = 'Sa
   ${fields.map(f => fieldHtml(f.showIf ? {...f, cur:values} : f, values[f.k])).join('')}
   <div class="btns"><button class="btn ghost" data-act="close">Cancelar</button><button class="btn" id="fsave">${saveLabel}</button></div>
   ${onDelete ? '<div class="btns"><button class="btn danger" id="fdel">Excluir</button></div>' : ''}</div>`;
+  fields.filter(f => f.t === 'pick').forEach(initPick);
   const syncShow = () => { const cur = {}; fields.forEach(f => { const e = $('#f_' + f.k); if (e) cur[f.k] = e.value; });
     fields.forEach(f => { if (f.showIf){ const w = document.querySelector('[data-wrap="' + f.k + '"]'); if (w) w.style.display = f.showIf(cur) ? '' : 'none'; } }); };
   if (fields.some(f => f.showIf)) $('.sheet').addEventListener('input', syncShow);
@@ -303,13 +374,12 @@ function viewCliente(){
   ${cs.length ? cs.map(x => conRow(x, false)).join('') : '<div class="empty">Nenhum conserto registrado.</div>'}
   <button class="fab" data-act="novo-conserto" data-id="${c.id}">+ Novo conserto</button>`;
 }
-const EQUIPS = ['TV','Rádio','Aparelho de som','Amplificador','DVD / Blu-ray','Micro-ondas','Outro'];
 function conFields(withCli){ return [
   ...(withCli ? [{k:'clienteId', l:'Cliente', t:'select', opts:[['', 'Escolha o cliente'], ...S.clientes.slice().sort((a,b) => (a.nome || '').localeCompare(b.nome || '','pt-BR')).map(c => [c.id, c.nome || 'Sem nome'])]}] : []),
   {k:'numero', l:'Número', t:'num', ph:'Automático'},
   {k:'data', l:'Data', t:'date'},
-  {k:'equipamento', l:'Equipamento', t:'combo', list:[...new Set([...EQUIPS, ...S.consertos.map(c => c.equipamento).filter(Boolean)])], ph:'Escolha ou digite'},
-  {k:'modelo', l:'Modelo'},
+  {k:'equipamento', l:'Equipamento', t:'pick', tipo:'equipamento'},
+  {k:'modelo', l:'Modelo', t:'pick', tipo:'modelo', dep:'equipamento'},
   {k:'polegadas', l:'Polegadas', t:'num', ph:'Ex.: 50', showIf: cur => isTV(cur.equipamento)},
   {k:'defeito', l:'Defeito relatado', t:'area'}, {k:'servico', l:'O que foi feito', t:'area'},
   {k:'valor', l:'Orçamento (R$)', t:'money', ph:'0,00'},
@@ -555,7 +625,7 @@ function viewBackup(){
 }
 async function doExport(){
   toast('Preparando cópia…');
-  const out = {app:'bancada', versao:1, data:new Date().toISOString(), clientes:S.clientes, consertos:S.consertos, estoque:S.estoque, equip:S.equip, arquivos:[]};
+  const out = {app:'bancada', versao:1, data:new Date().toISOString(), clientes:S.clientes, consertos:S.consertos, estoque:S.estoque, equip:S.equip, opcoes:S.opcoes, arquivos:[]};
   for (const f of await dbAll('arquivos')) out.arquivos.push({...f, blob:await blobToDataURL(f.blob)});
   const json = JSON.stringify(out), name = `eletronica-osmar-copia-${today()}.json`;
   const P = window.Capacitor && window.Capacitor.Plugins;
@@ -575,7 +645,7 @@ async function doImport(file){
   confirmDlg(`Restaurar a cópia de ${d.data ? fdate(d.data.slice(0,10)) : 'data desconhecida'}? Os dados atuais serão substituídos.`, async () => {
     for (const n of STORES) for (const o of await dbAll(n)) await tx(TOMB, 'readwrite', s => s.put({id:n + ':' + o.id, _u:Date.now() - 1000}));
     for (const n of STORES) await dbClear(n);
-    for (const k of ['clientes','consertos','estoque','equip']){ S[k] = d[k] || []; for (const o of S[k]) await dbPut(k, o); }
+    for (const k of ['clientes','consertos','estoque','equip','opcoes']){ S[k] = d[k] || []; for (const o of S[k]) await dbPut(k, o); }
     for (const f of d.arquivos || []) await dbPut('arquivos', {...f, blob:dataURLToBlob(f.blob)});
     Object.keys(filesCache).forEach(k => delete filesCache[k]);
     toast('Cópia restaurada.'); render();
@@ -689,7 +759,7 @@ document.addEventListener('input', e => {
 /* Tudo é salvo primeiro no celular (IndexedDB). Quando há internet, o app junta as
    mudanças deste aparelho com as da nuvem (vale a edição mais recente de cada item). */
 const SY = {st:'off', last:0, busy:false, again:false, timer:null, msg:'', err:''};
-const SYS = ['clientes','consertos','estoque','equip','arquivos'];
+const SYS = ['clientes','consertos','estoque','equip','arquivos','opcoes'];
 const LS = {
   get(k){ try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch(e){ return null; } },
   set(k, v){ try { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, JSON.stringify(v)); } catch(e){} }
@@ -800,8 +870,8 @@ async function syncNow(){
   for (const id of gone) await tx(TOMB, 'readwrite', st => st.delete(id));
   /* 3) atualizar a tela */
   if (changed){
-    const [c, k, s, q] = await Promise.all(['clientes','consertos','estoque','equip'].map(dbAll));
-    S.clientes = c || []; S.consertos = k || []; S.estoque = s || []; S.equip = (q || []).map(e => ({semelhantes:[], pecas:[], comentarios:'', ...e}));
+    const [c, k, s, q, o] = await Promise.all(['clientes','consertos','estoque','equip','opcoes'].map(dbAll));
+    S.clientes = c || []; S.consertos = k || []; S.estoque = s || []; S.equip = (q || []).map(e => ({semelhantes:[], pecas:[], comentarios:'', ...e})); S.opcoes = o || [];
     Object.keys(filesCache).forEach(k => delete filesCache[k]);
     const kind = {cliente:'clientes', conserto:'consertos', item:'estoque', equip:'equip'}[route.v];
     if (kind && !S[kind].some(x => x.id === route.id)){ stack = []; route = {v:{cliente:'clientes', conserto:'consertos', item:'estoque', equip:'equips'}[route.v]}; }
@@ -873,8 +943,8 @@ function syStart(){
 (async function init(){
   try { idb = await openDB(); } catch(e){ idb = null; memOnly = true; }
   try {
-    const [c, k, s, q] = await Promise.all(['clientes','consertos','estoque','equip'].map(dbAll));
-    S.clientes = c || []; S.consertos = k || []; S.estoque = s || []; S.equip = (q || []).map(e => ({semelhantes:[], pecas:[], comentarios:'', ...e}));
+    const [c, k, s, q, o] = await Promise.all(['clientes','consertos','estoque','equip','opcoes'].map(dbAll));
+    S.clientes = c || []; S.consertos = k || []; S.estoque = s || []; S.equip = (q || []).map(e => ({semelhantes:[], pecas:[], comentarios:'', ...e})); S.opcoes = o || [];
   } catch(e){ toast('Não consegui ler os dados salvos.'); }
   const A = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App;
   if (A && A.addListener) A.addListener('backButton', () => {
