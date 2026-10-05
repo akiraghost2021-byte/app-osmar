@@ -120,6 +120,13 @@ textarea.notes{width:100%;min-height:55vh;padding:12px;border:1.5px solid var(--
 .plain:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 .qty span.n{background:var(--stc);color:var(--on-c);border-radius:10px;padding:6px 0;min-width:46px}
 .buy{display:inline-block;margin-top:8px;padding:7px 16px;border-radius:999px;background:var(--stc);color:var(--on-c);font-weight:700;font-size:14px;text-decoration:none}
+.sdots{display:flex;gap:14px;margin:4px 0 6px}
+.sdots button{width:46px;height:46px;border-radius:50%;border:3px solid var(--stc);background:transparent;padding:0}
+.sdots button[aria-pressed="true"]{background:var(--stc);box-shadow:0 0 0 3px var(--card),0 0 0 5px var(--stc)}
+.dot.big{width:16px;height:16px;margin:0}
+.aceite{flex:none;width:46px;height:46px;border-radius:10px;border:1.5px solid var(--line);background:var(--bg);font-size:24px;line-height:1;padding:0}
+.orc{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:14px}
+.orc b{font-size:17px}
 .statusbtns{display:flex;gap:8px;margin-bottom:8px}
 .statusbtns button{flex:1;border:2px solid var(--stc);background:transparent;color:var(--ink);border-radius:10px;padding:11px 4px;font-weight:600;font-size:14px;min-height:46px}
 .statusbtns button[aria-pressed="true"]{background:var(--stc);color:var(--on-c)}
@@ -216,25 +223,30 @@ function fieldHtml(f, v){
     const val = f.t === 'money' ? moneyIn(v) : (v ?? '');
     inp = `<input id="${id}" type="${type}"${extra} value="${esc(val)}" placeholder="${ph}">`;
   }
-  return `<label class="fld"><span>${esc(f.l)}</span>${inp}</label>`;
+  return `<label class="fld" data-wrap="${f.k}"${f.showIf && !f.showIf(f.cur || {}) ? ' style="display:none"' : ''}><span>${esc(f.l)}</span>${inp}</label>`;
 }
 function openForm({title, fields, values = {}, onSave, onDelete, saveLabel = 'Salvar'}){
   $('#layer').innerHTML = `<div class="scrim" data-act="close"></div>
   <div class="sheet" role="dialog" aria-label="${esc(title)}"><h2>${esc(title)}</h2>
-  ${fields.map(f => fieldHtml(f, values[f.k])).join('')}
+  ${fields.map(f => fieldHtml(f.showIf ? {...f, cur:values} : f, values[f.k])).join('')}
   <div class="btns"><button class="btn ghost" data-act="close">Cancelar</button><button class="btn" id="fsave">${saveLabel}</button></div>
   ${onDelete ? '<div class="btns"><button class="btn danger" id="fdel">Excluir</button></div>' : ''}</div>`;
+  const syncShow = () => { const cur = {}; fields.forEach(f => { const e = $('#f_' + f.k); if (e) cur[f.k] = e.value; });
+    fields.forEach(f => { if (f.showIf){ const w = document.querySelector('[data-wrap="' + f.k + '"]'); if (w) w.style.display = f.showIf(cur) ? '' : 'none'; } }); };
+  if (fields.some(f => f.showIf)) $('.sheet').addEventListener('input', syncShow);
   const cpf = $('#f_cpf'); if (cpf) cpf.addEventListener('input', () => { cpf.value = maskCPF(cpf.value); });
   $('#fsave').onclick = async () => {
     const out = {}; let bad = null;
     for (const f of fields){
       const el = $('#f_' + f.k); let val = el.value.trim();
+      if (f.showIf && el.closest('label').style.display === 'none'){ out[f.k] = f.t === 'num' ? 0 : ''; continue; }
       if (f.req && !val){ el.classList.add('bad'); bad = bad || f; continue; }
       if (f.t === 'money') val = parseMoney(val);
       else if (f.t === 'num') val = val === '' ? 0 : Math.max(0, Number(val));
       out[f.k] = val;
     }
     if (bad){ toast('Preencha: ' + bad.l); return; }
+    if (!fields.some(f => f.t !== 'date' && !(f.t === 'select' && f.k !== 'clienteId') && String(out[f.k] ?? '').trim() !== '' && out[f.k] !== 0)){ toast('Preencha pelo menos um campo.'); return; }
     closeLayer(); await onSave(out); render();
   };
   if (onDelete) $('#fdel').onclick = () => confirmDlg('Excluir de vez? Isso não pode ser desfeito.', async () => { await onDelete(); render(); });
@@ -248,30 +260,33 @@ function confirmDlg(msg, onYes, yes = 'Excluir'){
 
 /* ---------- Clientes ---------- */
 function clienteFields(){ return [
-  {k:'nome', l:'Nome', req:true}, {k:'cpf', l:'CPF', t:'cpf', ph:'000.000.000-00'},
-  {k:'tel', l:'Telefone / WhatsApp', t:'tel'}, {k:'end', l:'Endereço'}, {k:'obs', l:'Observações', t:'area'}]; }
+  {k:'nome', l:'Nome'}, {k:'cpf', l:'CPF', t:'cpf', ph:'000.000.000-00'},
+  {k:'tel', l:'Telefone / WhatsApp', t:'tel'}, {k:'obs', l:'Observações', t:'area'}]; }
 function listClientes(){
   const q = norm(ui.q);
   const l = S.clientes.filter(c => !q || norm(c.nome + ' ' + c.cpf + ' ' + c.tel).includes(q)).sort((a,b) => a.nome.localeCompare(b.nome, 'pt-BR'));
   if (!l.length) return S.clientes.length ? '<div class="empty">Nenhum cliente encontrado.</div>' : '<div class="empty"><b>Nenhum cliente ainda</b>Toque em “Novo cliente” para cadastrar o primeiro.</div>';
   return l.map(c => {
     const cs = S.consertos.filter(x => x.clienteId === c.id), and = cs.filter(x => x.status === 'andamento').length;
-    return `<button class="row" data-act="open-cliente" data-id="${c.id}"><div class="grow"><b>${esc(c.nome)}</b><small>${esc([c.cpf, c.tel].filter(Boolean).join('  ·  ') || 'Sem CPF/telefone')}</small></div>
-    <div class="meta">${cs.length} conserto${cs.length === 1 ? '' : 's'}${and ? `<br><span class="pill c" style="--stc:var(--c-low)">${and} em andamento</span>` : ''}</div></button>`;
+    return `<button class="row" data-act="open-cliente" data-id="${c.id}"><div class="grow"><b>${esc(c.nome || 'Sem nome')}</b></div>
+    <div class="meta">${and ? '<span class="dot big" style="--stc:var(--c-low)"></span>' : ''}${cs.length ? cs.length : ''}</div></button>`;
   }).join('');
 }
 function viewClientes(){
   return `<div class="search"><input id="q" type="search" placeholder="Buscar por nome, CPF ou telefone" value="${esc(ui.q)}" autocomplete="off"></div>
   <div id="list">${listClientes()}</div><button class="fab" data-act="novo-cliente">+ Novo cliente</button>`;
 }
-const STATUS = {andamento:['Em andamento','var(--c-low)'], pronto:['Pronto','var(--c-ok)'], retirado:['Retirado','var(--c-ret)']};
+const STATUS = {andamento:['Em andamento','var(--c-low)'], pronto:['Pronto','var(--c-ok)'], retirado:['Retirado','var(--c-ret)'], semconserto:['Sem conserto','var(--c-zero)']};
+const ACEITE = {'':['☐','Sem resposta'], sim:['✅','Aceito'], nao:['❌','Recusado']};
+const isTV = v => /\btv\b|televis/i.test(v || '');
+const conTitle = x => { const t = [x.equipamento, x.modelo, x.polegadas ? x.polegadas + '"' : ''].filter(Boolean).join(' ') || x.aparelho; return t || 'Sem nome'; };
+const conNum = x => x.numero ? `<span class="tag">#${pad(x.numero)}</span>` : '';
 const stOf = x => STATUS[x.status] || STATUS.andamento;
-const stPill = x => `<span class="pill c" style="--stc:${stOf(x)[1]}">${stOf(x)[0]}</span>`;
+const stPill = x => `<span class="dot big" style="--stc:${stOf(x)[1]}" title="${esc(stOf(x)[0])}"></span>`;
 function conRow(x, showCli){
-  const st = stOf(x), c = showCli ? S.clientes.find(k => k.id === x.clienteId) : null;
-  const sub = [c ? c.nome : '', fdate(x.data), x.valor ? money(x.valor) : ''].filter(Boolean).join('  ·  ');
-  return `<button class="row st" style="--stc:${st[1]};align-items:flex-start" data-act="open-conserto" data-id="${x.id}"><div class="grow"><b>${esc(x.aparelho || 'Aparelho')}</b>
-    <small>${esc(sub)}</small>${x.defeito ? `<small style="white-space:normal;margin-top:4px">${esc(x.defeito)}</small>` : ''}</div>
+  const st = stOf(x);
+  return `<button class="row st" style="--stc:${st[1]}" data-act="open-conserto" data-id="${x.id}"><div class="grow"><b>${conNum(x)}${esc(conTitle(x))}</b>
+    <small>${esc(fdate(x.data)) || '&nbsp;'}</small></div>
     <div class="meta">${stPill(x)}${x.nfotos ? `<br>📷 ${x.nfotos}` : ''}</div></button>`;
 }
 function viewCliente(){
@@ -279,8 +294,8 @@ function viewCliente(){
   if (!c) return '<div class="empty">Cliente não encontrado.</div>';
   const cs = S.consertos.filter(x => x.clienteId === c.id).sort((a,b) => (b.data || '').localeCompare(a.data || ''));
   const ap = S.estoque.filter(x => x.clienteId === c.id);
-  const rows = [['CPF', c.cpf], ['Telefone', c.tel], ['Endereço', c.end], ['Obs.', c.obs]].filter(r => r[1]);
-  return `<div class="card"><h2>${esc(c.nome)}</h2>
+  const rows = [['CPF', c.cpf], ['Telefone', c.tel], ['Obs.', c.obs]].filter(r => r[1]);
+  return `<div class="card"><h2>${esc(c.nome || 'Sem nome')}</h2>
   ${rows.length ? `<dl class="kv">${rows.map(r => `<dt>${r[0]}</dt><dd>${esc(r[1])}</dd>`).join('')}</dl>` : '<p class="sub">Sem outros dados.</p>'}
   <div class="actions"><button class="btn small ghost" data-act="ed-cliente" data-id="${c.id}">Editar dados</button></div></div>
   ${ap.length ? `<div class="group">Aparelhos dele na oficina</div>${ap.map(a => `<button class="row" data-act="open-item" data-id="${a.id}"><div class="grow"><b><span class="tag">#${pad(a.numero)}</span>${esc(a.nome)}</b><small>${esc(a.obs || a.local || '')}</small></div>${a.nfotos ? `<div class="meta">📷 ${a.nfotos}</div>` : ''}</button>`).join('')}` : ''}
@@ -288,12 +303,18 @@ function viewCliente(){
   ${cs.length ? cs.map(x => conRow(x, false)).join('') : '<div class="empty">Nenhum conserto registrado.</div>'}
   <button class="fab" data-act="novo-conserto" data-id="${c.id}">+ Novo conserto</button>`;
 }
+const EQUIPS = ['TV','Rádio','Aparelho de som','Amplificador','DVD / Blu-ray','Micro-ondas','Outro'];
 function conFields(withCli){ return [
-  ...(withCli ? [{k:'clienteId', l:'Cliente', t:'select', req:true, opts:[['', 'Escolha o cliente'], ...S.clientes.slice().sort((a,b) => a.nome.localeCompare(b.nome,'pt-BR')).map(c => [c.id, c.nome])]}] : []),
-  {k:'data', l:'Data', t:'date', req:true}, {k:'aparelho', l:'Aparelho', ph:'Ex.: TV Samsung 50"', req:true},
+  ...(withCli ? [{k:'clienteId', l:'Cliente', t:'select', opts:[['', 'Escolha o cliente'], ...S.clientes.slice().sort((a,b) => (a.nome || '').localeCompare(b.nome || '','pt-BR')).map(c => [c.id, c.nome || 'Sem nome'])]}] : []),
+  {k:'numero', l:'Número', t:'num', ph:'Automático'},
+  {k:'data', l:'Data', t:'date'},
+  {k:'equipamento', l:'Equipamento', t:'combo', list:[...new Set([...EQUIPS, ...S.consertos.map(c => c.equipamento).filter(Boolean)])], ph:'Escolha ou digite'},
+  {k:'modelo', l:'Modelo'},
+  {k:'polegadas', l:'Polegadas', t:'num', ph:'Ex.: 50', showIf: cur => isTV(cur.equipamento)},
   {k:'defeito', l:'Defeito relatado', t:'area'}, {k:'servico', l:'O que foi feito', t:'area'},
-  {k:'valor', l:'Valor cobrado (R$)', t:'money', ph:'0,00'},
-  {k:'status', l:'Situação', t:'select', opts:Object.entries(STATUS).map(([k,v]) => [k, v[0]])}]; }
+  {k:'valor', l:'Orçamento (R$)', t:'money', ph:'0,00'},
+  {k:'aceite', l:'Orçamento aceito?', t:'select', opts:Object.entries(ACEITE).map(([k,v]) => [k, v[0] + ' ' + v[1]])},
+  {k:'obs', l:'Observações', t:'area'}]; }
 const fotosSection = () => `<div id="fotos" class="thumbs"></div>
   <div class="actions" style="margin-top:0"><label class="btn">Tirar foto<input id="cam" type="file" accept="image/*" capture="environment" hidden></label><label class="btn ghost">Escolher da galeria<input id="gal" type="file" accept="image/*" multiple hidden></label></div>`;
 function paintFotos(){
@@ -304,28 +325,30 @@ function paintFotos(){
 function viewConserto(){
   const x = S.consertos.find(k => k.id === route.id);
   if (!x) return '<div class="empty">Conserto não encontrado.</div>';
-  const c = S.clientes.find(k => k.id === x.clienteId), st = stOf(x);
-  const rows = [['Defeito', x.defeito], ['Feito', x.servico], ['Valor', x.valor ? money(x.valor) : '']].filter(r => r[1]);
-  return `<div class="card st" style="--stc:${st[1]}"><h2>${esc(x.aparelho)}</h2><div class="sub">${c ? esc(c.nome) + '  ·  ' : ''}${fdate(x.data)}</div>
-  <div class="group" style="margin-top:14px">Situação</div>
-  <div class="statusbtns">${Object.entries(STATUS).map(([k, v]) => `<button style="--stc:${v[1]}" data-act="set-status" data-s="${k}" aria-pressed="${x.status === k}">${v[0]}</button>`).join('')}</div>
+  const c = S.clientes.find(k => k.id === x.clienteId), st = stOf(x), ac = ACEITE[x.aceite] || ACEITE[''];
+  const rows = [['Defeito', x.defeito], ['Feito', x.servico], ['Obs.', x.obs]].filter(r => r[1]);
+  return `<div class="card st" style="--stc:${st[1]}"><h2>${conNum(x)}${esc(conTitle(x))}</h2><div class="sub">${c ? esc(c.nome || 'Sem nome') + '  ·  ' : ''}${fdate(x.data)}</div>
+  <div class="sdots" style="margin-top:14px">${Object.entries(STATUS).map(([k, v]) => `<button style="--stc:${v[1]}" data-act="set-status" data-s="${k}" aria-pressed="${(x.status || 'andamento') === k}" aria-label="${v[0]}" title="${v[0]}"></button>`).join('')}</div>
+  <div class="sub">${esc(st[0])}</div>
+  <div class="orc"><b>Orçamento: ${x.valor ? money(x.valor) : '—'}</b><button class="aceite" data-act="aceite" aria-label="Orçamento: ${ac[1]}" title="${ac[1]}">${ac[0]}</button></div>
   ${rows.length ? `<dl class="kv">${rows.map(r => `<dt>${r[0]}</dt><dd>${esc(r[1])}</dd>`).join('')}</dl>` : ''}
   <div class="actions"><button class="btn small ghost" data-act="ed-conserto" data-id="${x.id}">Editar</button></div></div>
   <div class="group">Fotos do aparelho</div>${fotosSection()}`;
 }
-const CST_ORDER = {andamento:0, pronto:1, retirado:2};
+const nextConNum = () => S.consertos.reduce((m, c) => Math.max(m, Number(c.numero) || 0), 0) + 1;
+const CST_ORDER = {andamento:0, pronto:1, retirado:2, semconserto:3};
 function listConsertos(){
   const q = norm(ui.q);
-  const l = S.consertos.filter(x => { const c = S.clientes.find(k => k.id === x.clienteId); return (ui.cst === 'todos' || x.status === ui.cst) && (!q || norm(`${x.aparelho} ${c ? c.nome : ''} ${x.defeito}`).includes(q)); })
+  const l = S.consertos.filter(x => { const c = S.clientes.find(k => k.id === x.clienteId); return (ui.cst === 'todos' || (x.status || 'andamento') === ui.cst) && (!q || norm(`${conTitle(x)} ${x.numero || ''} ${x.numero ? pad(x.numero) : ''} ${c ? c.nome : ''} ${x.defeito} ${x.obs || ''}`).includes(q)); })
     .sort((a,b) => (CST_ORDER[a.status] ?? 0) - (CST_ORDER[b.status] ?? 0) || (b.data || '').localeCompare(a.data || ''));
   if (!l.length) return S.consertos.length ? '<div class="empty">Nenhum conserto nessa situação.</div>' : '<div class="empty"><b>Nenhum conserto ainda</b>Toque em “Novo conserto” ou abra um cliente para registrar.</div>';
   return l.map(x => conRow(x, true)).join('');
 }
 function viewConsertos(){
-  const n = k => S.consertos.filter(x => x.status === k).length;
-  const chip = (k, t, col) => `<button class="chip" data-act="cst-f" data-f="${k}" aria-pressed="${ui.cst === k}">${col ? `<span class="dot" style="--stc:${col}"></span>` : ''}${t}</button>`;
-  return `<div class="search"><input id="q" type="search" placeholder="Buscar aparelho ou cliente" value="${esc(ui.q)}" autocomplete="off"></div>
-  <div class="chips">${chip('todos','Todos')}${Object.entries(STATUS).map(([k, v]) => chip(k, `${v[0]} (${n(k)})`, v[1])).join('')}</div>
+  const n = k => S.consertos.filter(x => (x.status || 'andamento') === k).length;
+  const chip = (k, t, col, lbl) => `<button class="chip" data-act="cst-f" data-f="${k}" aria-pressed="${ui.cst === k}"${lbl ? ` aria-label="${lbl}"` : ''}>${col ? `<span class="dot" style="--stc:${col};margin-right:${t ? 6 : 0}px"></span>` : ''}${t}</button>`;
+  return `<div class="search"><input id="q" type="search" placeholder="Buscar equipamento, número ou cliente" value="${esc(ui.q)}" autocomplete="off"></div>
+  <div class="chips">${chip('todos','Todos')}${Object.entries(STATUS).map(([k, v]) => chip(k, String(n(k)), v[1], v[0])).join('')}</div>
   <div id="list">${listConsertos()}</div><button class="fab" data-act="novo-conserto-geral">+ Novo conserto</button>`;
 }
 
@@ -334,8 +357,9 @@ function estoqueStatus(i){ if (i.tipo !== 'peca') return null; if (i.qtd <= 0) r
 const stockColor = i => i.tipo !== 'peca' ? 'var(--muted)' : ({zero:'var(--c-zero)', low:'var(--c-low)'}[estoqueStatus(i)] || 'var(--c-ok)');
 const fixUrl = u => { u = (u || '').trim(); return u && !/^https?:\/\//i.test(u) ? 'https://' + u : u; };
 function estFields(){ return [
+  {k:'numero', l:'Número', t:'num', ph:'Automático'},
   {k:'tipo', l:'Tipo', t:'select', opts:[['peca','Peça / componente'],['aparelho','Aparelho de cliente']]},
-  {k:'nome', l:'Nome / descrição', req:true, ph:'Ex.: Capacitor 470µF 25V'},
+  {k:'nome', l:'Nome / descrição', ph:'Ex.: Capacitor 470µF 25V'},
   {k:'qtd', l:'Quantidade', t:'num'}, {k:'min', l:'Ficar laranja quando restar (peças)', t:'num', ph:'0 = nunca'},
   {k:'valor', l:'Valor unitário (R$)', t:'money', ph:'0,00'}, {k:'local', l:'Onde está guardado', ph:'Gaveta 3, prateleira B...'},
   {k:'link', l:'Link para comprar (Mercado Livre, Shopee, AliExpress...)', t:'url', ph:'Cole aqui o link do produto ou da pesquisa'},
@@ -353,7 +377,7 @@ function listEstoque(){
     const st = estoqueStatus(i), cli = i.clienteId ? S.clientes.find(c => c.id === i.clienteId) : null;
     const sub = [i.local, cli ? 'Cliente: ' + cli.nome : '', i.valor ? money(i.valor) : ''].filter(Boolean).join('  ·  ');
     return `<div class="row st" style="--stc:${stockColor(i)}"><div class="grow"><button class="plain" data-act="${i.tipo === 'aparelho' ? 'open-item' : 'ed-est'}" data-id="${i.id}">
-      <b><span class="tag">#${pad(i.numero)}</span>${esc(i.nome)}</b><small>${esc(sub) || '&nbsp;'}</small></button>
+      <b><span class="tag">#${pad(i.numero)}</span>${esc(i.nome || 'Sem nome')}</b><small>${esc(sub) || '&nbsp;'}</small></button>
       ${i.tipo === 'aparelho' ? `<span class="pill">Aparelho${i.nfotos ? ' · 📷 ' + i.nfotos : ''}</span>` : ''}
       ${st && i.link ? `<a class="buy" href="${esc(i.link)}" target="_blank" rel="noopener">Comprar</a>` : ''}</div>
       ${i.tipo === 'peca' ? `<div class="qty"><button data-act="qtd" data-id="${i.id}" data-d="-1" aria-label="Diminuir">−</button><span class="n num">${i.qtd}</span><button data-act="qtd" data-id="${i.id}" data-d="1" aria-label="Aumentar">+</button></div>` : ''}</div>`;
@@ -371,7 +395,7 @@ function viewItem(){
   if (!i) return '<div class="empty">Item não encontrado.</div>';
   const cli = i.clienteId ? S.clientes.find(c => c.id === i.clienteId) : null;
   const rows = [['Cliente', cli && cli.nome], ['Guardado em', i.local], ['Obs.', i.obs]].filter(r => r[1]);
-  return `<div class="card"><h2><span class="tag">#${pad(i.numero)}</span>${esc(i.nome)}</h2>
+  return `<div class="card"><h2><span class="tag">#${pad(i.numero)}</span>${esc(i.nome || 'Sem nome')}</h2>
   ${rows.length ? `<dl class="kv">${rows.map(r => `<dt>${r[0]}</dt><dd>${esc(r[1])}</dd>`).join('')}</dl>` : ''}
   <div class="actions"><button class="btn small ghost" data-act="ed-est" data-id="${i.id}">Editar</button></div></div>
   <div class="group">Fotos do aparelho</div>${fotosSection()}`;
@@ -399,8 +423,8 @@ function viewEquips(){
   <div id="list">${listEquips()}</div><button class="fab" data-act="novo-equip">+ Novo equipamento</button>`;
 }
 function eqFields(){ return [
-  {k:'categoria', l:'Categoria', t:'combo', list:catsAll(), req:true, ph:'Escolha ou digite uma nova'},
-  {k:'marca', l:'Marca', req:true}, {k:'modelo', l:'Modelo', req:true}]; }
+  {k:'categoria', l:'Categoria', t:'combo', list:catsAll(), ph:'Escolha ou digite uma nova'},
+  {k:'marca', l:'Marca'}, {k:'modelo', l:'Modelo'}]; }
 function viewEquip(){
   const e = S.equip.find(x => x.id === route.id);
   if (!e) return '<div class="empty">Equipamento não encontrado.</div>';
@@ -415,17 +439,17 @@ function viewEquip(){
   } else if (sub === 'valores'){
     const p = e.pecas || [], tot = p.reduce((s, x) => s + (Number(x.valor) || 0), 0);
     body = `<p class="sub" style="margin-top:0">Preço de cada peça deste equipamento. Quando o mercado mudar, toque na peça e atualize.</p>
-    ${p.length ? p.map(x => `<button class="row" data-act="ed-peca" data-id="${x.id}"><div class="grow"><b>${esc(x.nome)}</b><small>atualizado em ${fdate(x.data)}</small></div><b class="num" style="flex:none">${money(x.valor)}</b></button>`).join('') + `<div class="card" style="display:flex;justify-content:space-between"><b>Total das peças</b><b class="num">${money(tot)}</b></div>` : '<div class="empty">Nenhuma peça cadastrada.</div>'}
+    ${p.length ? p.map(x => `<button class="row" data-act="ed-peca" data-id="${x.id}"><div class="grow"><b>${esc(x.nome || 'Sem nome')}</b><small>atualizado em ${fdate(x.data)}</small></div><b class="num" style="flex:none">${money(x.valor)}</b></button>`).join('') + `<div class="card" style="display:flex;justify-content:space-between"><b>Total das peças</b><b class="num">${money(tot)}</b></div>` : '<div class="empty">Nenhuma peça cadastrada.</div>'}
     <button class="btn" data-act="nova-peca">+ Adicionar peça</button>`;
   } else if (sub === 'semelhantes'){
     const s = e.semelhantes || [];
     body = `<p class="sub" style="margin-top:0">Modelos ou peças parecidas que podem substituir quando faltar o original.</p>
-    ${s.length ? s.map(x => `<button class="row" data-act="ed-sem" data-id="${x.id}"><div class="grow"><b>${esc(x.nome)}</b>${x.obs ? `<small style="white-space:normal">${esc(x.obs)}</small>` : ''}</div></button>`).join('') : '<div class="empty">Nenhum semelhante cadastrado.</div>'}
+    ${s.length ? s.map(x => `<button class="row" data-act="ed-sem" data-id="${x.id}"><div class="grow"><b>${esc(x.nome || 'Sem nome')}</b>${x.obs ? `<small style="white-space:normal">${esc(x.obs)}</small>` : ''}</div></button>`).join('') : '<div class="empty">Nenhum semelhante cadastrado.</div>'}
     <button class="btn" data-act="nova-sem">+ Adicionar semelhante</button>`;
   } else {
     body = `<textarea id="notas" class="notes" placeholder="Anote aqui o que você descobrir: pontos de teste, defeitos comuns, tensões, o que não está no manual...">${esc(e.comentarios || '')}</textarea><div class="saved" id="saved"></div>`;
   }
-  return `<div class="card"><h2>${esc(eqName(e))}</h2><div class="sub">${esc(e.categoria)}</div>
+  return `<div class="card"><h2>${esc(eqName(e) || 'Sem nome')}</h2><div class="sub">${esc(e.categoria || 'Sem categoria')}</div>
   <div class="actions"><button class="btn small ghost" data-act="ed-equip" data-id="${e.id}">Editar</button></div></div>
   <div class="seg" role="tablist">${tabs.map(t => `<button role="tab" data-act="sub" data-s="${t[0]}" aria-selected="${sub === t[0]}">${t[1]}</button>`).join('')}</div>${body}`;
 }
@@ -603,22 +627,23 @@ const act = {
     onDelete: async () => { for (const x of S.consertos.filter(k => k.clienteId === c.id)){ await dbDel('consertos', x.id); await delFotosOf(x.id); } S.consertos = S.consertos.filter(k => k.clienteId !== c.id);
       for (const i of S.estoque.filter(k => k.clienteId === c.id)){ i.clienteId = ''; await dbPut('estoque', i); }
       S.clientes = S.clientes.filter(k => k.id !== c.id); await dbDel('clientes', c.id); stack = []; route = {v:'clientes'}; }}); },
-  'novo-conserto': el => openForm({title:'Novo conserto', fields:conFields(), values:{data:today(), status:'andamento'}, onSave: async v => { const x = {id:uid(), clienteId:el.dataset.id, ...v}; S.consertos.push(x); await dbPut('consertos', x); }}),
+  'novo-conserto': el => openForm({title:'Novo conserto', fields:conFields(), values:{data:today(), status:'andamento'}, onSave: async v => { const x = {id:uid(), clienteId:el.dataset.id, status:'andamento', ...v, numero:v.numero || nextConNum()}; S.consertos.push(x); await dbPut('consertos', x); }}),
   'open-conserto': el => go({v:'conserto', id:el.dataset.id}),
   'open-item': el => go({v:'item', id:el.dataset.id}),
   'cst-f': el => { ui.cst = el.dataset.f; render(); },
   'novo-conserto-geral': () => { if (!S.clientes.length){ toast('Cadastre um cliente primeiro.'); return; }
-    openForm({title:'Novo conserto', fields:conFields(true), values:{data:today(), status:'andamento'}, onSave: async v => { const x = {id:uid(), ...v}; S.consertos.push(x); await dbPut('consertos', x); }}); },
+    openForm({title:'Novo conserto', fields:conFields(true), values:{data:today(), status:'andamento'}, onSave: async v => { const x = {id:uid(), status:'andamento', ...v, numero:v.numero || nextConNum()}; S.consertos.push(x); await dbPut('consertos', x); }}); },
+  aceite: async () => { const x = S.consertos.find(k => k.id === route.id); if (!x) return; const o = ['', 'sim', 'nao']; x.aceite = o[(o.indexOf(x.aceite || '') + 1) % 3]; await dbPut('consertos', x); render(); },
   'set-status': async el => { const x = S.consertos.find(k => k.id === route.id); if (!x) return; x.status = el.dataset.s; await dbPut('consertos', x); render(); },
   'ed-conserto': el => { const x = S.consertos.find(k => k.id === el.dataset.id); openForm({title:'Editar conserto', fields:conFields(), values:x,
-    onSave: async v => { Object.assign(x, v); await dbPut('consertos', x); },
+    onSave: async v => { if (!v.numero) v.numero = x.numero || nextConNum(); Object.assign(x, v); await dbPut('consertos', x); },
     onDelete: async () => { await delFotosOf(x.id); S.consertos = S.consertos.filter(k => k.id !== x.id); await dbDel('consertos', x.id); if (route.v === 'conserto') route = stack.pop() || {v:'consertos'}; }}); },
 
   'est-f': el => { ui.est = el.dataset.f; render(); },
   'novo-est': () => openForm({title:'Novo item no estoque', fields:estFields(), values:{tipo:'peca', qtd:1, min:0},
-    onSave: async v => { const numero = S.estoque.reduce((m, i) => Math.max(m, i.numero), 0) + 1; if (v.tipo === 'aparelho') v.qtd = 1; v.link = fixUrl(v.link); const i = {id:uid(), numero, ...v}; S.estoque.push(i); await dbPut('estoque', i); toast('Item #' + pad(numero) + ' criado.'); }}),
+    onSave: async v => { const numero = v.numero || (S.estoque.reduce((m, i) => Math.max(m, Number(i.numero) || 0), 0) + 1); if (v.tipo === 'aparelho') v.qtd = 1; v.link = fixUrl(v.link); const i = {id:uid(), ...v, numero}; S.estoque.push(i); await dbPut('estoque', i); toast('Item #' + pad(numero) + ' criado.'); }}),
   'ed-est': el => { const i = S.estoque.find(x => x.id === el.dataset.id); openForm({title:'Item #' + pad(i.numero), fields:estFields(), values:i,
-    onSave: async v => { if (v.tipo === 'aparelho') v.qtd = 1; v.link = fixUrl(v.link); Object.assign(i, v); await dbPut('estoque', i); },
+    onSave: async v => { if (v.tipo === 'aparelho') v.qtd = 1; v.link = fixUrl(v.link); if (!v.numero) v.numero = i.numero; Object.assign(i, v); await dbPut('estoque', i); },
     onDelete: async () => { await delFotosOf(i.id); S.estoque = S.estoque.filter(x => x.id !== i.id); await dbDel('estoque', i.id); if (route.v === 'item') route = stack.pop() || {v:'estoque'}; }}); },
   qtd: async el => { const i = S.estoque.find(x => x.id === el.dataset.id); i.qtd = Math.max(0, i.qtd + Number(el.dataset.d)); await dbPut('estoque', i); render(); },
 
@@ -631,16 +656,16 @@ const act = {
     onDelete: async () => { for (const f of await dbAll('arquivos')) if (f.equipId === e.id) await dbDel('arquivos', f.id); delete filesCache[e.id];
       S.equip = S.equip.filter(x => x.id !== e.id); await dbDel('equip', e.id); stack = []; route = {v:'equips'}; }}); },
   sub: el => { route.sub = el.dataset.s; render(); },
-  'nova-peca': () => { const e = S.equip.find(x => x.id === route.id); openForm({title:'Nova peça', fields:[{k:'nome', l:'Peça', req:true, ph:'Ex.: Fonte, placa T-Con, painel...'}, {k:'valor', l:'Valor (R$)', t:'money', ph:'0,00'}],
+  'nova-peca': () => { const e = S.equip.find(x => x.id === route.id); openForm({title:'Nova peça', fields:[{k:'nome', l:'Peça', ph:'Ex.: Fonte, placa T-Con, painel...'}, {k:'valor', l:'Valor (R$)', t:'money', ph:'0,00'}],
     onSave: async v => { e.pecas.push({id:uid(), nome:v.nome, valor:v.valor, data:today()}); await dbPut('equip', e); }}); },
   'ed-peca': el => { const e = S.equip.find(x => x.id === route.id), p = e.pecas.find(x => x.id === el.dataset.id);
-    openForm({title:'Editar peça', fields:[{k:'nome', l:'Peça', req:true}, {k:'valor', l:'Valor (R$)', t:'money'}], values:p,
+    openForm({title:'Editar peça', fields:[{k:'nome', l:'Peça'}, {k:'valor', l:'Valor (R$)', t:'money'}], values:p,
     onSave: async v => { if (v.valor !== p.valor) p.data = today(); p.nome = v.nome; p.valor = v.valor; await dbPut('equip', e); },
     onDelete: async () => { e.pecas = e.pecas.filter(x => x.id !== p.id); await dbPut('equip', e); }}); },
-  'nova-sem': () => { const e = S.equip.find(x => x.id === route.id); openForm({title:'Novo semelhante', fields:[{k:'nome', l:'Modelo ou peça semelhante', req:true}, {k:'obs', l:'Diferenças / se pode substituir', t:'area'}],
+  'nova-sem': () => { const e = S.equip.find(x => x.id === route.id); openForm({title:'Novo semelhante', fields:[{k:'nome', l:'Modelo ou peça semelhante'}, {k:'obs', l:'Diferenças / se pode substituir', t:'area'}],
     onSave: async v => { e.semelhantes.push({id:uid(), ...v}); await dbPut('equip', e); }}); },
   'ed-sem': el => { const e = S.equip.find(x => x.id === route.id), s = e.semelhantes.find(x => x.id === el.dataset.id);
-    openForm({title:'Editar semelhante', fields:[{k:'nome', l:'Modelo ou peça semelhante', req:true}, {k:'obs', l:'Diferenças / se pode substituir', t:'area'}], values:s,
+    openForm({title:'Editar semelhante', fields:[{k:'nome', l:'Modelo ou peça semelhante'}, {k:'obs', l:'Diferenças / se pode substituir', t:'area'}], values:s,
     onSave: async v => { Object.assign(s, v); await dbPut('equip', e); },
     onDelete: async () => { e.semelhantes = e.semelhantes.filter(x => x.id !== s.id); await dbPut('equip', e); }}); },
   'open-file': el => { const f = (filesCache[route.id] || []).find(x => x.id === el.dataset.id); if (f) openViewer(f); },
